@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model TallyConfiguration {
+  id           String    @id @default(cuid())
+  host         String
+  port         Int       @default(9000)
+  companyName  String
+  authToken    String?
+  syncInterval Int       @default(300000)
+  isActive     Boolean   @default(true)
+  lastSyncAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Ledger {
+  id             String         @id @default(cuid())
+  tallyId        String         @unique
+  name           String
+  alias          String?
+  groupName      String
+  parentGroup    String?
+  openingBalance Decimal        @default(0)
+  currentBalance Decimal        @default(0)
+  address        String?
+  gstin          String?
+  isActive       Boolean        @default(true)
+  lastSyncAt     DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  voucherEntries VoucherEntry[]
+
+  @@index([name])
+  @@index([groupName])
+}
+
+model StockGroup {
+  id         String      @id @default(cuid())
+  tallyId    String      @unique
+  name       String
+  parentGroup String?
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  stockItems StockItem[]
+}
+
+model StockItem {
+  id            String        @id @default(cuid())
+  tallyId       String        @unique
+  name          String
+  unit          String
+  openingQty    Decimal       @default(0)
+  openingValue  Decimal       @default(0)
+  closingQty    Decimal       @default(0)
+  closingValue  Decimal       @default(0)
+  rate          Decimal?
+  gstRate       Decimal?
+  hsnCode       String?
+  stockGroupId  String
+  isActive      Boolean       @default(true)
+  lastSyncAt    DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  stockGroup    StockGroup    @relation(fields: [stockGroupId], references: [id])
+  voucherEntries VoucherEntry[]
+
+  @@index([name])
+}
+
+model VoucherType {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  isActive Boolean   @default(true)
+  vouchers Voucher[]
+}
+
+model Voucher {
+  id             String         @id @default(cuid())
+  tallyId        String         @unique
+  voucherNumber  String
+  voucherDate    DateTime
+  voucherTypeId  String
+  narration      String?
+  isCancelled    Boolean        @default(false)
+  totalAmount    Decimal        @default(0)
+  lastSyncAt     DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  voucherType    VoucherType    @relation(fields: [voucherTypeId], references: [id])
+  entries        VoucherEntry[]
+
+  @@index([voucherDate])
+  @@index([voucherTypeId])
+  @@index([voucherNumber])
+}
+
+model VoucherEntry {
+  id         String     @id @default(cuid())
+  tallyId    String     @unique
+  voucherId  String
+  ledgerId   String
+  stockItemId String?
+  amount     Decimal
+  entryType  EntryType
+  quantity   Decimal?
+  rate       Decimal?
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  voucher    Voucher    @relation(fields: [voucherId], references: [id])
+  ledger     Ledger     @relation(fields: [ledgerId], references: [id])
+  stockItem  StockItem? @relation(fields: [stockItemId], references: [id])
+
+  @@index([voucherId])
+  @@index([ledgerId])
+}
+
+enum EntryType {
+  DR
+  CR
+}
+
+model SyncLog {
+  id               String     @id @default(cuid())
+  syncType         SyncType
+  status           SyncStatus
+  recordsProcessed Int
+  errors           Json?
+  startedAt        DateTime   @default(now())
+  completedAt      DateTime?
+  errorMessage     String?
+
+  @@index([startedAt])
+}
+
+enum SyncType {
+  FULL
+  INCREMENTAL
+}
+
+enum SyncStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model SyncMetadata {
+  id                  String   @id @default(cuid())
+  entityType          String   @unique
+  lastSyncTime        DateTime
+  lastTallyTimestamp  String?
+  version             Int      @default(1)
+}
+
+model UserProfile {
+  id             String   @id @default(cuid())
+  username       String   @unique
+  password       String
+  name           String?
+  email          String?  @unique
+  phoneNumber    String?
+  profilePicture String?
+  isActive       Boolean  @default(true)
+  pageAccess     Json?
+  role           Role     @default(VIEWER)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  VIEWER
+}
