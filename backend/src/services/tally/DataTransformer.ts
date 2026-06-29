@@ -2,6 +2,20 @@ import { prisma } from '../database/prismaClient.js';
 import { Prisma } from '@prisma/client';
 
 export class DataTransformer {
+  private parseTallyDate(dateStr: string): Date {
+    if (!dateStr) return new Date();
+    // If it's standard YYYYMMDD from Tally
+    if (dateStr.length === 8 && /^\d{8}$/.test(dateStr)) {
+      const year = parseInt(dateStr.substring(0, 4));
+      const month = parseInt(dateStr.substring(4, 6)) - 1;
+      const day = parseInt(dateStr.substring(6, 8));
+      return new Date(year, month, day);
+    }
+    // Fallback for normal dates
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+
   async transformAndSaveLedgers(rawLedgers: any, companyId: string): Promise<number> {
     const ledgers = this.extractLedgers(rawLedgers);
     
@@ -19,6 +33,7 @@ export class DataTransformer {
           update: {
             name: ledger.name,
             groupName: ledger.groupName,
+            parentGroup: ledger.parentGroup,
             openingBalance: ledger.openingBalance,
             currentBalance: ledger.currentBalance,
             lastSyncAt: new Date(),
@@ -29,6 +44,7 @@ export class DataTransformer {
             companyId,
             name: ledger.name,
             groupName: ledger.groupName,
+            parentGroup: ledger.parentGroup,
             openingBalance: ledger.openingBalance,
             currentBalance: ledger.currentBalance
           }
@@ -217,31 +233,34 @@ export class DataTransformer {
     if (!data) return ledgers;
     
     try {
-      const processGroup = (group: any) => {
+      const processGroup = (group: any, rootGroupName?: string) => {
+        const currentRoot = rootGroupName || group.name;
         if (group.ledgers) {
           group.ledgers.forEach((ledger: any) => {
             ledgers.push({
               tallyId: ledger.guid || ledger.name,
               name: ledger.name,
               groupName: group.name,
+              parentGroup: currentRoot,
               openingBalance: parseFloat(ledger.openingBalance || 0),
               currentBalance: parseFloat(ledger.closingBalance || 0)
             });
           });
         }
         if (group.groups) {
-          group.groups.forEach(processGroup);
+          group.groups.forEach((g: any) => processGroup(g, currentRoot));
         }
       };
       
       if (data.groups) {
-        data.groups.forEach(processGroup);
+        data.groups.forEach((g: any) => processGroup(g));
       } else if (data.ledgers) {
         data.ledgers.forEach((ledger: any) => {
           ledgers.push({
             tallyId: ledger.guid || ledger.name,
             name: ledger.name,
             groupName: data.groupName || 'Primary',
+            parentGroup: data.groupName || 'Primary',
             openingBalance: parseFloat(ledger.openingBalance || 0),
             currentBalance: parseFloat(ledger.closingBalance || 0)
           });
@@ -317,7 +336,7 @@ export class DataTransformer {
           vouchers.push({
             tallyId: voucher.guid || voucher.number,
             number: voucher.number,
-            date: new Date(voucher.date || voucher.voucherDate),
+            date: this.parseTallyDate(voucher.date || voucher.voucherDate),
             type: voucher.type || voucher.voucherType,
             narration: voucher.narration || '',
             totalAmount: parseFloat(voucher.totalAmount || 0),

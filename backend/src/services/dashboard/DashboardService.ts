@@ -9,7 +9,11 @@ export class DashboardService {
           SUM("currentBalance") as balance
         FROM "Ledger" l
         WHERE l."companyId" = ${companyId}
-          AND l."groupName" IN ('Current Assets', 'Fixed Assets', 'Bank Accounts', 'Sundry Debtors', 'Cash')
+          AND l."parentGroup" IN (
+            'Current Assets', 'Fixed Assets', 'Investments', 'Bank Accounts', 
+            'Cash-in-hand', 'Cash-in-Hand', 'Sundry Debtors', 'Loans & Advances (Asset)', 
+            'Deposits (Asset)', 'Misc. Expenses (ASSET)', 'Suspense A/c'
+          )
         
         UNION ALL
         
@@ -18,7 +22,11 @@ export class DashboardService {
           SUM("currentBalance") as balance
         FROM "Ledger" l
         WHERE l."companyId" = ${companyId}
-          AND l."groupName" IN ('Current Liabilities', 'Capital Account', 'Loans (Bank)', 'Sundry Creditors')
+          AND l."parentGroup" IN (
+            'Current Liabilities', 'Capital Account', 'Loans (Liability)', 'Sundry Creditors', 
+            'Duties & Taxes', 'Provisions', 'Bank OD A/c', 'Bank OCC A/c', 
+            'Secured Loans', 'Unsecured Loans', 'Reserves & Surplus', 'Branch / Divisions'
+          )
       `;
       return result;
     } catch (error) {

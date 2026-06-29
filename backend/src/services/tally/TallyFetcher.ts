@@ -212,6 +212,15 @@ export class TallyDataFetcher {
         if (typeof v === 'object') return v['#text'] ?? '';
         return String(v);
       }
+      
+      // Special case for Tally's NAME.LIST
+      if (f === 'NAME' && obj['NAME.LIST']) {
+        const nameList = obj['NAME.LIST'];
+        if (nameList.NAME) {
+          if (Array.isArray(nameList.NAME)) return String(nameList.NAME[0]);
+          return String(nameList.NAME);
+        }
+      }
     }
     return '';
   }
