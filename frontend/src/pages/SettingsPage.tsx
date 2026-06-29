@@ -26,6 +26,14 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -57,6 +65,11 @@ export function SettingsPage() {
   const { refreshCompanies } = useCompany()
   const [users, setUsers] = useState<User[]>([])
   const [syncing, setSyncing] = useState<string | null>(null)
+  
+  // Edit user state
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [editForm, setEditForm] = useState<Partial<User> & { password?: string }>({})
+  const [savingUser, setSavingUser] = useState(false)
 
   // Tally config form
   const [tallyHost, setTallyHost] = useState("localhost")
@@ -79,6 +92,35 @@ export function SettingsPage() {
       PENDING: "bg-yellow-100 text-yellow-800",
     }
     return map[s] || "bg-gray-100 text-gray-800"
+  }
+
+  function openEditSheet(user: User) {
+    setEditingUser(user)
+    setEditForm({ 
+      name: user.name || "", 
+      email: user.email || "", 
+      phoneNumber: user.phoneNumber || "", 
+      role: user.role,
+      pageAccess: user.pageAccess || [],
+      isActive: user.isActive,
+      password: ""
+    })
+  }
+
+  async function handleSaveUser() {
+    if (!editingUser) return
+    setSavingUser(true)
+    try {
+      const payload = { ...editForm }
+      if (!payload.password) delete payload.password
+      await api.put(`/users/${editingUser.id}`, payload)
+      toast.success("User updated successfully")
+      setEditingUser(null)
+      loadUsers()
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to update user")
+    }
+    setSavingUser(false)
   }
 
   async function handleTestConnection() {
@@ -208,6 +250,7 @@ export function SettingsPage() {
                           <TableHead>Name</TableHead>
                           <TableHead>Email</TableHead>
                           <TableHead>Role</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -216,7 +259,12 @@ export function SettingsPage() {
                             <TableCell>{user.username}</TableCell>
                             <TableCell>{user.name || "-"}</TableCell>
                             <TableCell>{user.email || "-"}</TableCell>
-                            <TableCell>{user.role}</TableCell>
+                            <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="outline" size="sm" onClick={() => openEditSheet(user)}>
+                                Edit
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -227,6 +275,109 @@ export function SettingsPage() {
             </TabsContent>
           </Tabs>
         </div>
+        
+        {/* Edit User Sheet */}
+        <Sheet open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Edit User</SheetTitle>
+              <SheetDescription>Make changes to the user's profile.</SheetDescription>
+            </SheetHeader>
+            {editingUser && (
+              <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={editForm.name || ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input type="email" value={editForm.email || ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input value={editForm.phoneNumber || ""} onChange={(e) => setEditForm({ ...editForm, phoneNumber: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>New Password</Label>
+                  <Input type="password" placeholder="Leave blank to keep current" value={editForm.password || ""} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <select 
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={editForm.role} 
+                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value as "ADMIN" | "VIEWER" })}
+                  >
+                    <option value="VIEWER">Viewer</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={editForm.isActive || false}
+                    onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })}
+                    className="size-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="isActive" className="font-normal cursor-pointer">
+                    Account is Active
+                  </Label>
+                </div>
+                
+                {editForm.role !== "ADMIN" && (
+                  <div className="space-y-3 pt-2">
+                    <Label>Page Access</Label>
+                    <div className="grid gap-3 border rounded-md p-4">
+                      {PAGE_OPTIONS.map((opt) => {
+                        const hasAccess = editForm.pageAccess?.includes(opt.id)
+                        return (
+                          <div key={opt.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                            <Label className="font-medium">
+                              {opt.label}
+                            </Label>
+                            {hasAccess ? (
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  const current = editForm.pageAccess || []
+                                  setEditForm({ ...editForm, pageAccess: current.filter(id => id !== opt.id) })
+                                }}
+                              >
+                                Revoke Access
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="default"
+                                size="sm"
+                                onClick={() => {
+                                  const current = editForm.pageAccess || []
+                                  setEditForm({ ...editForm, pageAccess: [...current, opt.id] })
+                                }}
+                              >
+                                Provide Access
+                              </Button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Select which pages this user can view.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            <SheetFooter>
+              <Button disabled={savingUser} onClick={handleSaveUser}>
+                {savingUser ? "Saving..." : "Save changes"}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       </SidebarInset>
     </SidebarProvider>
   )
