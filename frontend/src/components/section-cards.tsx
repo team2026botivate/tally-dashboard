@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import api from "@/lib/api"
+import { useCompany } from "@/lib/company"
 import {
   Card,
   CardDescription,
@@ -19,11 +20,14 @@ export function SectionCards() {
   const [ledgerCount, setLedgerCount] = useState<number | null>(null)
   const [voucherCount, setVoucherCount] = useState<number | null>(null)
 
+  const { activeCompany } = useCompany()
+
   useEffect(() => {
+    if (!activeCompany) return
     Promise.all([
-      api.get("/dashboard/balance-sheet"),
-      api.get("/dashboard/trial-balance"),
-      api.get("/dashboard/recent-vouchers?limit=1000"),
+      api.get(`/dashboard/balance-sheet?companyId=${activeCompany.id}`),
+      api.get(`/dashboard/trial-balance?companyId=${activeCompany.id}`),
+      api.get(`/dashboard/recent-vouchers?limit=1000&companyId=${activeCompany.id}`),
     ]).then(([bsRes, tbRes, rvRes]) => {
       const data = bsRes.data as BalanceRow[]
       setAssets(data.find((r: BalanceRow) => r.category === "Assets")?.balance ?? 0)
@@ -31,7 +35,7 @@ export function SectionCards() {
       setLedgerCount(tbRes.data.length)
       setVoucherCount(rvRes.data.length)
     }).catch(() => {})
-  }, [])
+  }, [activeCompany])
 
   function fmt(n: number | null) {
     if (n === null) return null

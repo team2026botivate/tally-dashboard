@@ -2,7 +2,7 @@ import { prisma } from '../database/prismaClient.js';
 import { Prisma } from '@prisma/client';
 
 export class DataTransformer {
-  async transformAndSaveLedgers(rawLedgers: any): Promise<number> {
+  async transformAndSaveLedgers(rawLedgers: any, companyId: string): Promise<number> {
     const ledgers = this.extractLedgers(rawLedgers);
     
     if (ledgers.length === 0) {
@@ -15,16 +15,18 @@ export class DataTransformer {
       
       for (const ledger of ledgers) {
         await tx.ledger.upsert({
-          where: { tallyId: ledger.tallyId },
+          where: { tallyId_companyId: { tallyId: ledger.tallyId, companyId } },
           update: {
             name: ledger.name,
             groupName: ledger.groupName,
             openingBalance: ledger.openingBalance,
             currentBalance: ledger.currentBalance,
-            lastSyncAt: new Date()
+            lastSyncAt: new Date(),
+            companyId
           },
           create: {
             tallyId: ledger.tallyId,
+            companyId,
             name: ledger.name,
             groupName: ledger.groupName,
             openingBalance: ledger.openingBalance,
@@ -40,7 +42,7 @@ export class DataTransformer {
     return result;
   }
 
-  async transformAndSaveStockGroups(rawStockGroups: any): Promise<number> {
+  async transformAndSaveStockGroups(rawStockGroups: any, companyId: string): Promise<number> {
     const stockGroups = this.extractStockGroups(rawStockGroups);
     
     if (stockGroups.length === 0) {
@@ -53,13 +55,15 @@ export class DataTransformer {
       
       for (const sg of stockGroups) {
         await tx.stockGroup.upsert({
-          where: { tallyId: sg.tallyId },
+          where: { tallyId_companyId: { tallyId: sg.tallyId, companyId } },
           update: {
             name: sg.name,
-            parentGroup: sg.parentGroup
+            parentGroup: sg.parentGroup,
+            companyId
           },
           create: {
             tallyId: sg.tallyId,
+            companyId,
             name: sg.name,
             parentGroup: sg.parentGroup
           }
@@ -73,7 +77,7 @@ export class DataTransformer {
     return result;
   }
 
-  async transformAndSaveStockItems(rawStockItems: any): Promise<number> {
+  async transformAndSaveStockItems(rawStockItems: any, companyId: string): Promise<number> {
     const stockItems = this.extractStockItems(rawStockItems);
     
     if (stockItems.length === 0) {
@@ -86,12 +90,12 @@ export class DataTransformer {
       
       for (const item of stockItems) {
         const stockGroup = await tx.stockGroup.findFirst({
-          where: { name: item.groupName }
+          where: { name: item.groupName, companyId }
         });
         
         if (stockGroup) {
           await tx.stockItem.upsert({
-            where: { tallyId: item.tallyId },
+            where: { tallyId_companyId: { tallyId: item.tallyId, companyId } },
             update: {
               name: item.name,
               unit: item.unit,
@@ -103,10 +107,12 @@ export class DataTransformer {
               gstRate: item.gstRate,
               hsnCode: item.hsnCode,
               stockGroupId: stockGroup.id,
-              lastSyncAt: new Date()
+              lastSyncAt: new Date(),
+              companyId
             },
             create: {
               tallyId: item.tallyId,
+              companyId,
               name: item.name,
               unit: item.unit,
               openingQty: item.openingQty,
@@ -129,7 +135,7 @@ export class DataTransformer {
     return result;
   }
 
-  async transformAndSaveVouchers(rawVouchers: any): Promise<number> {
+  async transformAndSaveVouchers(rawVouchers: any, companyId: string): Promise<number> {
     const vouchers = this.extractVouchers(rawVouchers);
     
     if (vouchers.length === 0) {
@@ -152,16 +158,18 @@ export class DataTransformer {
           });
 
           const savedVoucher = await tx.voucher.upsert({
-            where: { tallyId: voucher.tallyId },
+            where: { tallyId_companyId: { tallyId: voucher.tallyId, companyId } },
             update: {
               voucherNumber: voucher.number,
               voucherDate: voucher.date,
               narration: voucher.narration,
               totalAmount: voucher.totalAmount,
-              lastSyncAt: new Date()
+              lastSyncAt: new Date(),
+              companyId
             },
             create: {
               tallyId: voucher.tallyId,
+              companyId,
               voucherNumber: voucher.number,
               voucherDate: voucher.date,
               voucherTypeId: voucherType.id,
@@ -172,18 +180,20 @@ export class DataTransformer {
 
           for (const entry of voucher.entries) {
             const ledger = await tx.ledger.findUnique({
-              where: { tallyId: entry.ledgerId }
+              where: { tallyId_companyId: { tallyId: entry.ledgerId, companyId } }
             });
 
             if (ledger) {
               await tx.voucherEntry.upsert({
-                where: { tallyId: entry.tallyId },
+                where: { tallyId_companyId: { tallyId: entry.tallyId, companyId } },
                 update: {
                   amount: entry.amount,
-                  entryType: entry.type
+                  entryType: entry.type,
+                  companyId
                 },
                 create: {
                   tallyId: entry.tallyId,
+                  companyId,
                   voucherId: savedVoucher.id,
                   ledgerId: ledger.id,
                   amount: entry.amount,

@@ -35,9 +35,9 @@ export function CompanyDataPage() {
       return
     }
     Promise.all([
-      api.get("/dashboard/trial-balance"),
-      api.get("/dashboard/recent-vouchers?limit=20"),
-      api.get("/dashboard/stock-summary"),
+      api.get(`/dashboard/trial-balance?companyId=${activeCompany.id}`),
+      api.get(`/dashboard/recent-vouchers?limit=20&companyId=${activeCompany.id}`),
+      api.get(`/dashboard/stock-summary?companyId=${activeCompany.id}`),
     ])
       .then(([tb, rv, ss]) => {
         setLedgers(tb.data)

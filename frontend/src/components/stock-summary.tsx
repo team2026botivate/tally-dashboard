@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import api from "@/lib/api"
+import { useCompany } from "@/lib/company"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Card,
@@ -30,12 +31,15 @@ export function StockSummary() {
   const [data, setData] = useState<StockRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  const { activeCompany } = useCompany()
+
   useEffect(() => {
-    api.get("/dashboard/stock-summary")
+    if (!activeCompany) return
+    api.get(`/dashboard/stock-summary?companyId=${activeCompany.id}`)
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [activeCompany])
 
   return (
     <Card>

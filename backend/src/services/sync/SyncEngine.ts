@@ -37,16 +37,16 @@ export class SyncEngine {
       const masters = await this.fetcher.fetchAllMasters();
 
       console.log('Saving ledgers...');
-      const ledgerCount = await this.transformer.transformAndSaveLedgers(masters.ledgers);
+      const ledgerCount = await this.transformer.transformAndSaveLedgers(masters.ledgers, configId);
 
       console.log('Saving stock groups...');
-      const stockGroupCount = await this.transformer.transformAndSaveStockGroups(masters.stockGroups);
+      const stockGroupCount = await this.transformer.transformAndSaveStockGroups(masters.stockGroups, configId);
 
       console.log('Saving stock items...');
-      const stockItemCount = await this.transformer.transformAndSaveStockItems(masters.stockItems);
+      const stockItemCount = await this.transformer.transformAndSaveStockItems(masters.stockItems, configId);
 
       console.log('Fetching vouchers...');
-      const voucherCount = await this.fetchAndSaveVouchersInBatches();
+      const voucherCount = await this.fetchAndSaveVouchersInBatches(configId);
 
       console.log('Updating sync metadata...');
       await this.updateSyncMetadata();
@@ -103,7 +103,7 @@ export class SyncEngine {
     try {
       console.log('Syncing ledgers...');
       const data = await this.fetcher.fetchReport('LedgerList');
-      const count = await this.transformer.transformAndSaveLedgers(data);
+      const count = await this.transformer.transformAndSaveLedgers(data, configId);
       await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.COMPLETED, recordsProcessed: count, completedAt: new Date() } });
       return count;
     } catch (error: any) {
@@ -119,10 +119,10 @@ export class SyncEngine {
     try {
       console.log('Syncing stock groups...');
       const groupsData = await this.fetcher.fetchReport('StockGroupList');
-      const groupCount = await this.transformer.transformAndSaveStockGroups(groupsData);
+      const groupCount = await this.transformer.transformAndSaveStockGroups(groupsData, configId);
       console.log('Syncing stock items...');
       const itemsData = await this.fetcher.fetchReport('StockItemList');
-      const itemCount = await this.transformer.transformAndSaveStockItems(itemsData);
+      const itemCount = await this.transformer.transformAndSaveStockItems(itemsData, configId);
       const total = groupCount + itemCount;
       await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.COMPLETED, recordsProcessed: total, completedAt: new Date() } });
       return total;
@@ -137,7 +137,7 @@ export class SyncEngine {
       data: { syncType: SyncType.INCREMENTAL, status: SyncStatus.IN_PROGRESS, recordsProcessed: 0 }
     });
     try {
-      const count = await this.fetchAndSaveVouchersInBatches(fromDate, toDate);
+      const count = await this.fetchAndSaveVouchersInBatches(configId, fromDate, toDate);
       await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.COMPLETED, recordsProcessed: count, completedAt: new Date() } });
       return count;
     } catch (error: any) {
@@ -169,7 +169,7 @@ export class SyncEngine {
       const fromDate = lastSync?.lastSyncTime || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const toDate = new Date();
 
-      const voucherCount = await this.fetchAndSaveVouchersInBatches(fromDate, toDate);
+      const voucherCount = await this.fetchAndSaveVouchersInBatches(configId, fromDate, toDate);
 
       await prisma.syncMetadata.upsert({
         where: { entityType: 'vouchers' },
@@ -206,7 +206,7 @@ export class SyncEngine {
     }
   }
 
-  private async fetchAndSaveVouchersInBatches(fromDate?: Date, toDate?: Date): Promise<number> {
+  private async fetchAndSaveVouchersInBatches(configId: string, fromDate?: Date, toDate?: Date): Promise<number> {
     let totalProcessed = 0;
     
     console.log('Fetching all vouchers in single batch...');
@@ -215,7 +215,7 @@ export class SyncEngine {
 
     console.log(`Fetched ${voucherArray.length} vouchers`);
 
-    const processed = await this.transformer.transformAndSaveVouchers(rawVouchers);
+    const processed = await this.transformer.transformAndSaveVouchers(rawVouchers, configId);
     totalProcessed += processed;
 
     return totalProcessed;

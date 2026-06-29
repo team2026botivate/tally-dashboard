@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import api from "@/lib/api"
+import { useCompany } from "@/lib/company"
 
 interface TrendRow {
   date: string
@@ -28,12 +29,15 @@ export function ChartAreaInteractive() {
   const [data, setData] = useState<TrendRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  const { activeCompany } = useCompany()
+
   useEffect(() => {
-    api.get("/dashboard/voucher-trends?days=30")
+    if (!activeCompany) return
+    api.get(`/dashboard/voucher-trends?days=30&companyId=${activeCompany.id}`)
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [activeCompany])
 
   const byDate: Record<string, { date: string; total: number }> = {}
   for (const row of data) {

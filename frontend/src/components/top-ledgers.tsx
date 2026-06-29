@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import api from "@/lib/api"
+import { useCompany } from "@/lib/company"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Card,
@@ -27,12 +28,15 @@ export function TopLedgers() {
   const [data, setData] = useState<LedgerRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  const { activeCompany } = useCompany()
+
   useEffect(() => {
-    api.get("/dashboard/top-ledgers?limit=5")
+    if (!activeCompany) return
+    api.get(`/dashboard/top-ledgers?limit=5&companyId=${activeCompany.id}`)
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [activeCompany])
 
   function fmt(amt: string) {
     return new Intl.NumberFormat("en-IN", {

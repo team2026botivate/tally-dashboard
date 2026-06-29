@@ -19,11 +19,17 @@ model TallyConfiguration {
   lastSyncAt   DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  ledgers      Ledger[]
+  stockGroups  StockGroup[]
+  stockItems   StockItem[]
+  vouchers     Voucher[]
+  voucherEntries VoucherEntry[]
 }
 
 model Ledger {
   id             String         @id @default(cuid())
-  tallyId        String         @unique
+  tallyId        String
+  companyId      String
   name           String
   alias          String?
   groupName      String
@@ -37,25 +43,32 @@ model Ledger {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   voucherEntries VoucherEntry[]
+  company        TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([tallyId, companyId])
   @@index([name])
   @@index([groupName])
 }
 
 model StockGroup {
   id         String      @id @default(cuid())
-  tallyId    String      @unique
+  tallyId    String
+  companyId  String
   name       String
   parentGroup String?
   isActive   Boolean     @default(true)
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   stockItems StockItem[]
+  company    TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([tallyId, companyId])
 }
 
 model StockItem {
   id            String        @id @default(cuid())
-  tallyId       String        @unique
+  tallyId       String
+  companyId     String
   name          String
   unit          String
   openingQty    Decimal       @default(0)
@@ -71,8 +84,10 @@ model StockItem {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   stockGroup    StockGroup    @relation(fields: [stockGroupId], references: [id])
+  company       TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
   voucherEntries VoucherEntry[]
 
+  @@unique([tallyId, companyId])
   @@index([name])
 }
 
@@ -85,7 +100,8 @@ model VoucherType {
 
 model Voucher {
   id             String         @id @default(cuid())
-  tallyId        String         @unique
+  tallyId        String
+  companyId      String
   voucherNumber  String
   voucherDate    DateTime
   voucherTypeId  String
@@ -96,8 +112,10 @@ model Voucher {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   voucherType    VoucherType    @relation(fields: [voucherTypeId], references: [id])
+  company        TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
   entries        VoucherEntry[]
 
+  @@unique([tallyId, companyId])
   @@index([voucherDate])
   @@index([voucherTypeId])
   @@index([voucherNumber])
@@ -105,7 +123,8 @@ model Voucher {
 
 model VoucherEntry {
   id         String     @id @default(cuid())
-  tallyId    String     @unique
+  tallyId    String
+  companyId  String
   voucherId  String
   ledgerId   String
   stockItemId String?
@@ -115,10 +134,12 @@ model VoucherEntry {
   rate       Decimal?
   isActive   Boolean    @default(true)
   createdAt  DateTime   @default(now())
-  voucher    Voucher    @relation(fields: [voucherId], references: [id])
+  voucher    Voucher    @relation(fields: [voucherId], references: [id], onDelete: Cascade)
   ledger     Ledger     @relation(fields: [ledgerId], references: [id])
   stockItem  StockItem? @relation(fields: [stockItemId], references: [id])
+  company    TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([tallyId, companyId])
   @@index([voucherId])
   @@index([ledgerId])
 }

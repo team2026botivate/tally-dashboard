@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 import api from "@/lib/api"
+import { useCompany } from "@/lib/company"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -34,12 +35,15 @@ export function DataTable() {
   const [page, setPage] = useState(0)
   const pageSize = 10
 
+  const { activeCompany } = useCompany()
+
   useEffect(() => {
-    api.get("/dashboard/recent-vouchers?limit=50")
+    if (!activeCompany) return
+    api.get(`/dashboard/recent-vouchers?limit=50&companyId=${activeCompany.id}`)
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [activeCompany])
 
   const totalPages = Math.ceil(data.length / pageSize)
   const pageData = data.slice(page * pageSize, (page + 1) * pageSize)

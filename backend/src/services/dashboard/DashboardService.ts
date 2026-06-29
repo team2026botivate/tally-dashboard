@@ -1,24 +1,24 @@
 import { prisma } from '../database/prismaClient.js';
 
 export class DashboardService {
-  async getBalanceSheet(): Promise<any> {
+  async getBalanceSheet(companyId: string): Promise<any> {
     try {
       const result = await prisma.$queryRaw`
         SELECT 
           'Assets' as category,
-          SUM(CASE WHEN e."entryType" = 'DR' THEN e.amount ELSE -e.amount END) as balance
-        FROM "VoucherEntry" e
-        JOIN "Ledger" l ON e."ledgerId" = l.id
-        WHERE l."groupName" IN ('Current Assets', 'Fixed Assets', 'Bank Accounts', 'Sundry Debtors', 'Cash')
+          SUM("currentBalance") as balance
+        FROM "Ledger" l
+        WHERE l."companyId" = ${companyId}
+          AND l."groupName" IN ('Current Assets', 'Fixed Assets', 'Bank Accounts', 'Sundry Debtors', 'Cash')
         
         UNION ALL
         
         SELECT 
           'Liabilities' as category,
-          SUM(CASE WHEN e."entryType" = 'CR' THEN e.amount ELSE -e.amount END) as balance
-        FROM "VoucherEntry" e
-        JOIN "Ledger" l ON e."ledgerId" = l.id
-        WHERE l."groupName" IN ('Current Liabilities', 'Capital Account', 'Loans (Bank)', 'Sundry Creditors')
+          SUM("currentBalance") as balance
+        FROM "Ledger" l
+        WHERE l."companyId" = ${companyId}
+          AND l."groupName" IN ('Current Liabilities', 'Capital Account', 'Loans (Bank)', 'Sundry Creditors')
       `;
       return result;
     } catch (error) {
@@ -27,8 +27,9 @@ export class DashboardService {
     }
   }
 
-  async getTrialBalance(): Promise<any> {
+  async getTrialBalance(companyId: string): Promise<any> {
     const ledgers = await prisma.ledger.findMany({
+      where: { companyId },
       select: {
         name: true,
         groupName: true,
@@ -40,7 +41,7 @@ export class DashboardService {
     return ledgers;
   }
 
-  async getVoucherTrends(days: number = 30): Promise<any> {
+  async getVoucherTrends(companyId: string, days: number = 30): Promise<any> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -53,7 +54,8 @@ export class DashboardService {
           SUM(v."totalAmount") as total_amount
         FROM "Voucher" v
         JOIN "VoucherType" vt ON v."voucherTypeId" = vt.id
-        WHERE v."voucherDate" >= ${startDate}
+        WHERE v."companyId" = ${companyId}
+          AND v."voucherDate" >= ${startDate}
           AND v."isCancelled" = false
         GROUP BY DATE("voucherDate"), vt.name
         ORDER BY DATE("voucherDate") DESC, vt.name
@@ -65,8 +67,9 @@ export class DashboardService {
     }
   }
 
-  async getTopLedgers(limit: number = 10): Promise<any> {
+  async getTopLedgers(companyId: string, limit: number = 10): Promise<any> {
     const topLedgers = await prisma.ledger.findMany({
+      where: { companyId },
       select: {
         name: true,
         groupName: true,
@@ -80,8 +83,9 @@ export class DashboardService {
     return topLedgers;
   }
 
-  async getStockSummary(): Promise<any> {
+  async getStockSummary(companyId: string): Promise<any> {
     const stockSummary = await prisma.stockItem.findMany({
+      where: { companyId },
       select: {
         name: true,
         unit: true,
@@ -97,7 +101,7 @@ export class DashboardService {
     return stockSummary;
   }
 
-  async getRecentVouchers(limit: number = 20): Promise<any> {
+  async getRecentVouchers(companyId: string, limit: number = 20): Promise<any> {
     const vouchers = await prisma.voucher.findMany({
       select: {
         voucherNumber: true,
@@ -109,6 +113,7 @@ export class DashboardService {
         }
       },
       where: {
+        companyId,
         isCancelled: false
       },
       orderBy: {
