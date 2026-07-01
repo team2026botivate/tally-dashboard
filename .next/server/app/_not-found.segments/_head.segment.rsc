@@ -1,5 +1,0 @@
-1:"$Sreact.fragment"
-2:I[97367,["/_next/static/chunks/02hb6tm7x9r-n.js","/_next/static/chunks/256whwvw_y7jv.js","/_next/static/chunks/16extjs_094bl.js"],"ViewportBoundary"]
-3:I[97367,["/_next/static/chunks/02hb6tm7x9r-n.js","/_next/static/chunks/256whwvw_y7jv.js","/_next/static/chunks/16extjs_094bl.js"],"MetadataBoundary"]
-4:"$Sreact.suspense"
-0:{"rsc":["$","$1","h",{"children":[["$","meta",null,{"name":"robots","content":"noindex"}],["$","$L2",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L3",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Tally ERP"}],["$","meta","1",{"name":"description","content":"TallyPrime Remote Data Gateway"}]]}]}]}],null]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"Z9w3m43-jjK_NOxkxtw2T"}
