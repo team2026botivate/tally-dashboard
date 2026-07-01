@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import axios from 'axios';
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 import { prisma } from '../services/database/prismaClient.js';
+import { TallyDataFetcher } from '../services/tally/TallyFetcher.js';
 
 const router = Router();
 
@@ -59,6 +62,115 @@ router.get('/all', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
     res.json(configs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/config/remote - Generate a new remote gateway configuration
+router.post('/remote', async (req, res) => {
+  try {
+    const { label, syncInterval } = req.body;
+    
+    // Generate credentials
+    const gatewayId = 'gw_' + crypto.randomBytes(8).toString('hex');
+    const deviceSecret = crypto.randomBytes(20).toString('hex');
+    const deviceSecretHash = await bcrypt.hash(deviceSecret, 10);
+    
+    // Create deactivated configuration record first
+    const config = await prisma.tallyConfiguration.create({
+      data: {
+        host: 'localhost', // placeholder, since it connects remotely
+        port: 9000,
+        companyName: label || 'Remote Gateway',
+        syncInterval: syncInterval ? Number(syncInterval) : 300000,
+        isActive: false,
+        isRemote: true,
+        gatewayId,
+        deviceSecretHash,
+        status: 'OFFLINE'
+      }
+    });
+
+    res.status(201).json({
+      config,
+      credentials: {
+        gatewayId,
+        deviceSecret
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/config/:id/fetch-companies - Fetch companies from a remote gateway and register configs
+router.post('/:id/fetch-companies', async (req, res) => {
+  try {
+    const configId = req.params.id;
+    const baseConfig = await prisma.tallyConfiguration.findUnique({
+      where: { id: configId }
+    });
+
+    if (!baseConfig) {
+      return res.status(404).json({ error: 'Configuration not found' });
+    }
+
+    if (!baseConfig.isRemote || !baseConfig.gatewayId) {
+      return res.status(400).json({ error: 'This configuration is not a remote gateway' });
+    }
+
+    // Initialize fetcher with base config
+    const fetcher = new TallyDataFetcher(baseConfig);
+    const parsed = await fetcher.fetchReport('CompanyInfo');
+
+    const companiesList = parsed?.ENVELOPE?.BODY?.DATA?.COLLECTION?.[0]?.COMPANY || [];
+    const companyNames: string[] = companiesList.map((c: any) => 
+      typeof c.NAME === 'object' ? c.NAME['#text'] : c.NAME
+    ).filter(Boolean);
+
+    if (companyNames.length === 0) {
+      return res.status(404).json({ error: 'No companies found on remote Tally instance' });
+    }
+
+    // Create/update remote configuration for each company
+    // Mark first company as active remote config
+    const created: any[] = [];
+    for (let i = 0; i < companyNames.length; i++) {
+      const companyName = companyNames[i];
+      const existing = await prisma.tallyConfiguration.findFirst({
+        where: { companyName, gatewayId: baseConfig.gatewayId }
+      });
+
+      if (existing) {
+        const updated = await prisma.tallyConfiguration.update({
+          where: { id: existing.id },
+          data: { isActive: i === 0, companyName } // update company name (in case of casing)
+        });
+        created.push(updated);
+      } else {
+        const newConfig = await prisma.tallyConfiguration.create({
+          data: {
+            host: baseConfig.host,
+            port: baseConfig.port,
+            companyName,
+            syncInterval: baseConfig.syncInterval,
+            isActive: i === 0,
+            isRemote: true,
+            gatewayId: baseConfig.gatewayId,
+            deviceSecretHash: baseConfig.deviceSecretHash
+          }
+        });
+        created.push(newConfig);
+      }
+    }
+
+    // If the base config was just a template (i.e. name is 'Remote Gateway'), we can clean it up or keep it
+    if (baseConfig.companyName === 'Remote Gateway') {
+      await prisma.tallyConfiguration.delete({ where: { id: baseConfig.id } });
+    }
+
+    res.json({ configs: created, companies: companyNames });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

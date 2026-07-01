@@ -1,0 +1,20 @@
+{
+  "name": "tally-remote-agent",
+  "version": "1.0.0",
+  "description": "Local TallyPrime Gateway Agent Client",
+  "main": "agent.ts",
+  "scripts": {
+    "start": "tsx agent.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "socket.io-client": "^4.7.5",
+    "systeminformation": "^5.23.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "@types/node": "^22.7.4"
+  }
+}

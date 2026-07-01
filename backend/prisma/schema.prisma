@@ -9,41 +9,47 @@ datasource db {
 }
 
 model TallyConfiguration {
-  id           String    @id @default(cuid())
-  host         String
-  port         Int       @default(9000)
-  companyName  String
-  authToken    String?
-  syncInterval Int       @default(300000)
-  isActive     Boolean   @default(true)
-  lastSyncAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  ledgers      Ledger[]
-  stockGroups  StockGroup[]
-  stockItems   StockItem[]
-  vouchers     Voucher[]
-  voucherEntries VoucherEntry[]
+  id               String         @id @default(cuid())
+  host             String
+  port             Int            @default(9000)
+  companyName      String
+  authToken        String?
+  syncInterval     Int            @default(300000)
+  isActive         Boolean        @default(true)
+  lastSyncAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deviceInfo       Json?
+  deviceSecretHash String?
+  gatewayId        String?        @unique
+  isRemote         Boolean        @default(false)
+  lastHeartbeatAt  DateTime?
+  status           String         @default("OFFLINE")
+  ledgers          Ledger[]
+  stockGroups      StockGroup[]
+  stockItems       StockItem[]
+  vouchers         Voucher[]
+  voucherEntries   VoucherEntry[]
 }
 
 model Ledger {
-  id             String         @id @default(cuid())
+  id             String             @id @default(cuid())
   tallyId        String
   companyId      String
   name           String
   alias          String?
   groupName      String
   parentGroup    String?
-  openingBalance Decimal        @default(0)
-  currentBalance Decimal        @default(0)
+  openingBalance Decimal            @default(0)
+  currentBalance Decimal            @default(0)
   address        String?
   gstin          String?
-  isActive       Boolean        @default(true)
-  lastSyncAt     DateTime       @default(now())
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  voucherEntries VoucherEntry[]
+  isActive       Boolean            @default(true)
+  lastSyncAt     DateTime           @default(now())
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   company        TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  voucherEntries VoucherEntry[]
 
   @@unique([tallyId, companyId])
   @@index([name])
@@ -51,40 +57,40 @@ model Ledger {
 }
 
 model StockGroup {
-  id         String      @id @default(cuid())
-  tallyId    String
-  companyId  String
-  name       String
+  id          String             @id @default(cuid())
+  tallyId     String
+  companyId   String
+  name        String
   parentGroup String?
-  isActive   Boolean     @default(true)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  stockItems StockItem[]
-  company    TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  company     TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  stockItems  StockItem[]
 
   @@unique([tallyId, companyId])
 }
 
 model StockItem {
-  id            String        @id @default(cuid())
-  tallyId       String
-  companyId     String
-  name          String
-  unit          String
-  openingQty    Decimal       @default(0)
-  openingValue  Decimal       @default(0)
-  closingQty    Decimal       @default(0)
-  closingValue  Decimal       @default(0)
-  rate          Decimal?
-  gstRate       Decimal?
-  hsnCode       String?
-  stockGroupId  String
-  isActive      Boolean       @default(true)
-  lastSyncAt    DateTime      @default(now())
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  stockGroup    StockGroup    @relation(fields: [stockGroupId], references: [id])
-  company       TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id             String             @id @default(cuid())
+  tallyId        String
+  companyId      String
+  name           String
+  unit           String
+  openingQty     Decimal            @default(0)
+  openingValue   Decimal            @default(0)
+  closingQty     Decimal            @default(0)
+  closingValue   Decimal            @default(0)
+  rate           Decimal?
+  gstRate        Decimal?
+  hsnCode        String?
+  stockGroupId   String
+  isActive       Boolean            @default(true)
+  lastSyncAt     DateTime           @default(now())
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  company        TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  stockGroup     StockGroup         @relation(fields: [stockGroupId], references: [id])
   voucherEntries VoucherEntry[]
 
   @@unique([tallyId, companyId])
@@ -99,21 +105,21 @@ model VoucherType {
 }
 
 model Voucher {
-  id             String         @id @default(cuid())
-  tallyId        String
-  companyId      String
-  voucherNumber  String
-  voucherDate    DateTime
-  voucherTypeId  String
-  narration      String?
-  isCancelled    Boolean        @default(false)
-  totalAmount    Decimal        @default(0)
-  lastSyncAt     DateTime       @default(now())
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  voucherType    VoucherType    @relation(fields: [voucherTypeId], references: [id])
-  company        TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  entries        VoucherEntry[]
+  id            String             @id @default(cuid())
+  tallyId       String
+  companyId     String
+  voucherNumber String
+  voucherDate   DateTime
+  voucherTypeId String
+  narration     String?
+  isCancelled   Boolean            @default(false)
+  totalAmount   Decimal            @default(0)
+  lastSyncAt    DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  company       TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  voucherType   VoucherType        @relation(fields: [voucherTypeId], references: [id])
+  entries       VoucherEntry[]
 
   @@unique([tallyId, companyId])
   @@index([voucherDate])
@@ -122,31 +128,26 @@ model Voucher {
 }
 
 model VoucherEntry {
-  id         String     @id @default(cuid())
-  tallyId    String
-  companyId  String
-  voucherId  String
-  ledgerId   String
+  id          String             @id @default(cuid())
+  tallyId     String
+  companyId   String
+  voucherId   String
+  ledgerId    String
   stockItemId String?
-  amount     Decimal
-  entryType  EntryType
-  quantity   Decimal?
-  rate       Decimal?
-  isActive   Boolean    @default(true)
-  createdAt  DateTime   @default(now())
-  voucher    Voucher    @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  ledger     Ledger     @relation(fields: [ledgerId], references: [id])
-  stockItem  StockItem? @relation(fields: [stockItemId], references: [id])
-  company    TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  amount      Decimal
+  entryType   EntryType
+  quantity    Decimal?
+  rate        Decimal?
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  company     TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ledger      Ledger             @relation(fields: [ledgerId], references: [id])
+  stockItem   StockItem?         @relation(fields: [stockItemId], references: [id])
+  voucher     Voucher            @relation(fields: [voucherId], references: [id], onDelete: Cascade)
 
   @@unique([tallyId, companyId])
   @@index([voucherId])
   @@index([ledgerId])
-}
-
-enum EntryType {
-  DR
-  CR
 }
 
 model SyncLog {
@@ -162,24 +163,12 @@ model SyncLog {
   @@index([startedAt])
 }
 
-enum SyncType {
-  FULL
-  INCREMENTAL
-}
-
-enum SyncStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  FAILED
-}
-
 model SyncMetadata {
-  id                  String   @id @default(cuid())
-  entityType          String   @unique
-  lastSyncTime        DateTime
-  lastTallyTimestamp  String?
-  version             Int      @default(1)
+  id                 String   @id @default(cuid())
+  entityType         String   @unique
+  lastSyncTime       DateTime
+  lastTallyTimestamp String?
+  version            Int      @default(1)
 }
 
 model UserProfile {
@@ -195,6 +184,23 @@ model UserProfile {
   role           Role     @default(VIEWER)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+enum EntryType {
+  DR
+  CR
+}
+
+enum SyncType {
+  FULL
+  INCREMENTAL
+}
+
+enum SyncStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
 }
 
 enum Role {

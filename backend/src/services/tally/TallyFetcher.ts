@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { XMLParser } from 'fast-xml-parser';
+import { SocketServer } from './socketServer.js';
 
 interface MastersData {
   ledgers: any;
@@ -11,8 +12,12 @@ export class TallyDataFetcher {
   private client: AxiosInstance;
   private parser: XMLParser;
   private companyName: string;
+  private isRemote: boolean;
+  private gatewayId: string;
 
   constructor(config: any) {
+    this.isRemote = config.isRemote || false;
+    this.gatewayId = config.gatewayId || '';
     this.client = axios.create({
       baseURL: `http://${config.host}:${config.port}`,
       timeout: 30000
@@ -26,18 +31,28 @@ export class TallyDataFetcher {
       isArray: (tagName: string) =>
         ['LEDGER', 'GROUP', 'STOCKGROUP', 'STOCKITEM', 'VOUCHER',
          'LEDGERENTRY', 'TALLYMESSAGE', 'COLLECTION', 'ADDRESS',
-         'LINE', 'COMPANY'].includes(tagName)
+         'LINE', 'COMPANY'].includes(tagName.toUpperCase())
     });
   }
 
   async fetchReport(reportName: string, params: Record<string, any> = {}): Promise<any> {
     const xml = this.buildXml(reportName, params);
     try {
-      const response = await this.client.post('/', xml, {
-        headers: { 'Content-Type': 'application/xml' },
-        timeout: 30000
-      });
-      const parsed = this.parser.parse(response.data);
+      let responseData: string;
+      if (this.isRemote) {
+        if (!this.gatewayId) {
+          throw new Error('Remote gateway configuration is missing gatewayId');
+        }
+        const socketServer = SocketServer.getInstance();
+        responseData = await socketServer.sendRequest(this.gatewayId, xml);
+      } else {
+        const response = await this.client.post('/', xml, {
+          headers: { 'Content-Type': 'application/xml' },
+          timeout: 30000
+        });
+        responseData = response.data;
+      }
+      const parsed = this.parser.parse(responseData);
       return this.transform(reportName, parsed);
     } catch (error: any) {
       console.error(`Failed to fetch ${reportName}:`, error?.message);
@@ -200,25 +215,39 @@ export class TallyDataFetcher {
 
   private collectionItems(dataColl: any[] | undefined, tag: string): any[] {
     if (!dataColl || dataColl.length === 0) return [];
-    const items = dataColl[0][tag];
+    const upper = tag.toUpperCase();
+    const lower = tag.toLowerCase();
+    const capitalized = tag.charAt(0).toUpperCase() + tag.slice(1).toLowerCase();
+    const obj = dataColl[0];
+    const items = obj[tag] || obj[upper] || obj[lower] || obj[capitalized];
     return items || [];
   }
 
   private val(obj: any, ...fields: string[]): string {
     if (!obj) return '';
     for (const f of fields) {
-      const v = obj[f] || obj[`@_${f}`];
-      if (v != null) {
-        if (typeof v === 'object') return v['#text'] ?? '';
-        return String(v);
-      }
-      
-      // Special case for Tally's NAME.LIST
-      if (f === 'NAME' && obj['NAME.LIST']) {
-        const nameList = obj['NAME.LIST'];
-        if (nameList.NAME) {
-          if (Array.isArray(nameList.NAME)) return String(nameList.NAME[0]);
-          return String(nameList.NAME);
+      const upper = f.toUpperCase();
+      const lower = f.toLowerCase();
+      const capitalized = f.charAt(0).toUpperCase() + f.slice(1).toLowerCase();
+      const candidates = [f, upper, lower, capitalized];
+
+      for (const cand of candidates) {
+        const v = obj[cand] || obj[`@_${cand}`];
+        if (v != null) {
+          if (typeof v === 'object') return v['#text'] ?? '';
+          return String(v);
+        }
+
+        const nameListKey = `${cand}.LIST`;
+        if (obj[nameListKey]) {
+          const nameList = obj[nameListKey];
+          const nameListCandidates = [cand, cand.toUpperCase(), cand.toLowerCase()];
+          for (const nKey of nameListCandidates) {
+            if (nameList[nKey]) {
+              if (Array.isArray(nameList[nKey])) return String(nameList[nKey][0]);
+              return String(nameList[nKey]);
+            }
+          }
         }
       }
     }
@@ -335,7 +364,15 @@ export class TallyDataFetcher {
   }
 
   private extractVoucher(v: any): any {
-    const entries = v.LEDGERENTRIES?.LEDGERENTRY || [];
+    let entries: any[] = [];
+    if (v['ALLLEDGERENTRIES.LIST']) {
+      entries = Array.isArray(v['ALLLEDGERENTRIES.LIST']) ? v['ALLLEDGERENTRIES.LIST'] : [v['ALLLEDGERENTRIES.LIST']];
+    } else if (v['LEDGERENTRIES.LIST']) {
+      entries = Array.isArray(v['LEDGERENTRIES.LIST']) ? v['LEDGERENTRIES.LIST'] : [v['LEDGERENTRIES.LIST']];
+    } else if (v.LEDGERENTRIES?.LEDGERENTRY) {
+      entries = Array.isArray(v.LEDGERENTRIES.LEDGERENTRY) ? v.LEDGERENTRIES.LEDGERENTRY : [v.LEDGERENTRIES.LEDGERENTRY];
+    }
+
     const guid = this.val(v, 'GUID', 'VOUCHERNUMBER');
     return {
       guid,

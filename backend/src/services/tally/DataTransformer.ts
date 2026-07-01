@@ -195,8 +195,14 @@ export class DataTransformer {
           });
 
           for (const entry of voucher.entries) {
-            const ledger = await tx.ledger.findUnique({
-              where: { tallyId_companyId: { tallyId: entry.ledgerId, companyId } }
+            const ledger = await tx.ledger.findFirst({
+              where: { 
+                companyId,
+                OR: [
+                  { tallyId: entry.ledgerId },
+                  { name: entry.ledgerId }
+                ]
+              }
             });
 
             if (ledger) {

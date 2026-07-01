@@ -23,7 +23,7 @@ router.get('/ping', async (req, res) => {
   try {
     const config = await prisma.tallyConfiguration.findFirst({ where: { isActive: true } });
     if (!config) return res.status(404).json({ connected: false, host: null, port: null, error: 'No active Tally configuration found. Please configure Tally in Settings first.' });
-    const fetcher = new TallyDataFetcher({ host: config.host, port: config.port, companyName: config.companyName } as any);
+    const fetcher = new TallyDataFetcher(config);
     await fetcher.fetchReport('CompanyInfo');
     res.json({ connected: true, host: config.host, port: config.port });
   } catch (error: any) {
@@ -33,9 +33,9 @@ router.get('/ping', async (req, res) => {
 
 // POST /api/tally/test-connection (legacy)
 router.post('/test-connection', async (req, res) => {
-  const { host, port, companyName } = req.body;
+  const { host, port, companyName, isRemote, gatewayId } = req.body;
   try {
-    const fetcher = new TallyDataFetcher({ host, port, companyName: companyName || '', authToken: null } as any);
+    const fetcher = new TallyDataFetcher({ host, port, companyName: companyName || '', isRemote, gatewayId, authToken: null } as any);
     await fetcher.fetchReport('CompanyInfo');
     res.json({ success: true, message: 'Connected successfully' });
   } catch (error: any) {
@@ -49,42 +49,15 @@ router.get('/companies', async (req, res) => {
     const config = await prisma.tallyConfiguration.findFirst({ where: { isActive: true } });
     if (!config) return res.status(404).json({ error: 'No active Tally configuration found. Please configure Tally in Settings first.' });
 
-    const xml = `<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>CompanyList</ID>
-  </HEADER>
-  <BODY>
-    <DESC>
-      <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="CompanyList" ISINITIALIZE="No" ISFIXLIST="No">
-            <TYPE>Company</TYPE>
-            <FETCH>NAME, GUID</FETCH>
-          </COLLECTION>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
-  </BODY>
-</ENVELOPE>`;
+    const fetcher = new TallyDataFetcher(config);
+    const parsed = await fetcher.fetchReport('CompanyInfo');
 
-    const response = await axios.post(`http://${config.host}:${config.port}`, xml, {
-      headers: { 'Content-Type': 'application/xml' },
-      timeout: 15000
-    });
+    const companiesList = parsed?.ENVELOPE?.BODY?.DATA?.COLLECTION?.[0]?.COMPANY || [];
+    const companyNames: string[] = companiesList.map((c: any) => 
+      typeof c.NAME === 'object' ? c.NAME['#text'] : c.NAME
+    ).filter(Boolean);
 
-    const body = response.data;
-    const nameRegex = /<NAME\s*(?:[^>]*)>([^<]+)<\/NAME>/gi;
-    const names: string[] = [];
-    let match;
-    while ((match = nameRegex.exec(body)) !== null) {
-      names.push(match[1]);
-    }
-
-    const companies = [...new Set(names)].map((name, i) => ({
+    const companies = [...new Set(companyNames)].map((name, i) => ({
       id: `tally-${i}`,
       companyName: name
     }));
