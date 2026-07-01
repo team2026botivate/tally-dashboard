@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { syncConfigFromEnv } from '@/lib/auto-config';
 import axios from 'axios';
 
 async function fetchTallyCompanies(host: string, port: number): Promise<string[]> {
@@ -39,6 +40,7 @@ async function fetchTallyCompanies(host: string, port: number): Promise<string[]
 
 export async function GET() {
   try {
+    await syncConfigFromEnv();
     const config = await prisma.tallyConfiguration.findFirst({
       where: { isActive: true }
     });
