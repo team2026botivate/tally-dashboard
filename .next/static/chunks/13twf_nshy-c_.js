@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,16370,e=>{"use strict";var i=e.i(43476),r=e.i(30909);e.s(["default",0,function({children:e}){return(0,i.jsx)(r.SidebarProvider,{children:e})}])}]);

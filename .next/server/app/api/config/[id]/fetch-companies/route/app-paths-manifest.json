@@ -1,0 +1,3 @@
+{
+  "/api/config/[id]/fetch-companies/route": "app/api/config/[id]/fetch-companies/route.js"
+}

@@ -1,0 +1,290 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/api/config/[id]",
+      "regex": "^/api/config/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/config/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/config/[id]/activate",
+      "regex": "^/api/config/([^/]+?)/activate(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/config/(?<nxtPid>[^/]+?)/activate(?:/)?$"
+    },
+    {
+      "page": "/api/config/[id]/fetch-companies",
+      "regex": "^/api/config/([^/]+?)/fetch\\-companies(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/config/(?<nxtPid>[^/]+?)/fetch\\-companies(?:/)?$"
+    },
+    {
+      "page": "/api/tally/sync/[configId]",
+      "regex": "^/api/tally/sync/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPconfigId": "nxtPconfigId"
+      },
+      "namedRegex": "^/api/tally/sync/(?<nxtPconfigId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/users/[id]",
+      "regex": "^/api/users/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/users/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/api/auth/login",
+      "regex": "^/api/auth/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/login(?:/)?$"
+    },
+    {
+      "page": "/api/auth/me",
+      "regex": "^/api/auth/me(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/me(?:/)?$"
+    },
+    {
+      "page": "/api/config",
+      "regex": "^/api/config(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/config(?:/)?$"
+    },
+    {
+      "page": "/api/config/all",
+      "regex": "^/api/config/all(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/config/all(?:/)?$"
+    },
+    {
+      "page": "/api/config/remote",
+      "regex": "^/api/config/remote(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/config/remote(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/balance-sheet",
+      "regex": "^/api/dashboard/balance\\-sheet(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/balance\\-sheet(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/recent-vouchers",
+      "regex": "^/api/dashboard/recent\\-vouchers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/recent\\-vouchers(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/stock-summary",
+      "regex": "^/api/dashboard/stock\\-summary(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/stock\\-summary(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/top-ledgers",
+      "regex": "^/api/dashboard/top\\-ledgers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/top\\-ledgers(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/trial-balance",
+      "regex": "^/api/dashboard/trial\\-balance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/trial\\-balance(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/voucher-trends",
+      "regex": "^/api/dashboard/voucher\\-trends(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/voucher\\-trends(?:/)?$"
+    },
+    {
+      "page": "/api/health",
+      "regex": "^/api/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/health(?:/)?$"
+    },
+    {
+      "page": "/api/tally/companies",
+      "regex": "^/api/tally/companies(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/companies(?:/)?$"
+    },
+    {
+      "page": "/api/tally/ledgers",
+      "regex": "^/api/tally/ledgers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/ledgers(?:/)?$"
+    },
+    {
+      "page": "/api/tally/ping",
+      "regex": "^/api/tally/ping(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/ping(?:/)?$"
+    },
+    {
+      "page": "/api/tally/stock",
+      "regex": "^/api/tally/stock(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/stock(?:/)?$"
+    },
+    {
+      "page": "/api/tally/sync/full",
+      "regex": "^/api/tally/sync/full(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/sync/full(?:/)?$"
+    },
+    {
+      "page": "/api/tally/sync/ledgers",
+      "regex": "^/api/tally/sync/ledgers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/sync/ledgers(?:/)?$"
+    },
+    {
+      "page": "/api/tally/sync/status",
+      "regex": "^/api/tally/sync/status(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/sync/status(?:/)?$"
+    },
+    {
+      "page": "/api/tally/sync/stock",
+      "regex": "^/api/tally/sync/stock(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/sync/stock(?:/)?$"
+    },
+    {
+      "page": "/api/tally/sync/vouchers",
+      "regex": "^/api/tally/sync/vouchers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/sync/vouchers(?:/)?$"
+    },
+    {
+      "page": "/api/tally/sync-log",
+      "regex": "^/api/tally/sync\\-log(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/sync\\-log(?:/)?$"
+    },
+    {
+      "page": "/api/tally/test-connection",
+      "regex": "^/api/tally/test\\-connection(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/test\\-connection(?:/)?$"
+    },
+    {
+      "page": "/api/tally/vouchers",
+      "regex": "^/api/tally/vouchers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tally/vouchers(?:/)?$"
+    },
+    {
+      "page": "/api/users",
+      "regex": "^/api/users(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/users(?:/)?$"
+    },
+    {
+      "page": "/companies",
+      "regex": "^/companies(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/companies(?:/)?$"
+    },
+    {
+      "page": "/company-data",
+      "regex": "^/company\\-data(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/company\\-data(?:/)?$"
+    },
+    {
+      "page": "/dashboard",
+      "regex": "^/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/settings",
+      "regex": "^/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings(?:/)?$"
+    },
+    {
+      "page": "/sync",
+      "regex": "^/sync(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/sync(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}
