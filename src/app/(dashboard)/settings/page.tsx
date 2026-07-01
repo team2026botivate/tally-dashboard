@@ -77,6 +77,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadUsers()
+    fetch("/api/config")
+      .then((res) => res.ok ? res.json() : null)
+      .then((cfg) => {
+        if (cfg?.host) setTallyHost(cfg.host)
+        if (cfg?.port) setTallyPort(String(cfg.port))
+      })
+      .catch(() => {})
   }, [])
 
   function loadUsers() {
@@ -134,13 +141,14 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ host: tallyHost, port: Number(tallyPort) }),
       })
+      const data = await res.json()
       if (res.ok) {
         toast.success("Tally connected on " + tallyHost + ":" + tallyPort)
       } else {
-        toast.error("Tally not reachable on " + tallyHost + ":" + tallyPort)
+        toast.error(data.error || "Tally not reachable on " + tallyHost + ":" + tallyPort)
       }
-    } catch {
-      toast.error("Tally not reachable on " + tallyHost + ":" + tallyPort)
+    } catch (err: any) {
+      toast.error(err.message || "Tally not reachable on " + tallyHost + ":" + tallyPort)
     }
     setTesting(false)
   }

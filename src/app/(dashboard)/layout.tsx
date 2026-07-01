@@ -1,11 +1,14 @@
 "use client";
 
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { SidebarProvider } from "@/components/ui/sidebar"
+import { CompanyProvider } from "@/lib/company-provider";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider>
-      {children}
-    </SidebarProvider>
+    <CompanyProvider>
+      <SidebarProvider>
+        {children}
+      </SidebarProvider>
+    </CompanyProvider>
   );
 }

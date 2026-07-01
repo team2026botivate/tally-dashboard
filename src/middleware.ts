@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { jwtVerify } from "jose";
 
-const JWT_SECRET = process.env.JWT_SECRET || "tally-app-jwt-secret-2024-super-secure-key";
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || "tally-app-jwt-secret-2024-super-secure-key"
+);
 
 const publicPaths = ["/login", "/api/auth/login", "/api/health"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (publicPaths.some(p => pathname.startsWith(p))) {
@@ -28,8 +31,7 @@ export function middleware(request: NextRequest) {
   }
 
   try {
-    const jwt = require("jsonwebtoken");
-    jwt.verify(token, JWT_SECRET);
+    await jwtVerify(token, JWT_SECRET);
     return NextResponse.next();
   } catch {
     if (pathname.startsWith("/api/")) {

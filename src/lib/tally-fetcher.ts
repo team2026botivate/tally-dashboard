@@ -7,18 +7,12 @@ interface MastersData {
   stockItems: any;
 }
 
-const AGENT_SERVICE_URL = process.env.AGENT_SERVICE_URL || 'http://localhost:3001';
-
 export class TallyDataFetcher {
   private client: AxiosInstance;
   private parser: XMLParser;
   private companyName: string;
-  private isRemote: boolean;
-  private gatewayId: string;
 
   constructor(config: any) {
-    this.isRemote = config.isRemote || false;
-    this.gatewayId = config.gatewayId || '';
     this.client = axios.create({
       baseURL: `http://${config.host}:${config.port}`,
       timeout: 30000
@@ -39,24 +33,11 @@ export class TallyDataFetcher {
   async fetchReport(reportName: string, params: Record<string, any> = {}): Promise<any> {
     const xml = this.buildXml(reportName, params);
     try {
-      let responseData: string;
-      if (this.isRemote) {
-        if (!this.gatewayId) {
-          throw new Error('Remote gateway configuration is missing gatewayId');
-        }
-        const agentRes = await axios.post(`${AGENT_SERVICE_URL}/api/agent/request`, {
-          gatewayId: this.gatewayId,
-          xml,
-        }, { timeout: 45000 });
-        responseData = agentRes.data.xml;
-      } else {
-        const response = await this.client.post('/', xml, {
-          headers: { 'Content-Type': 'application/xml' },
-          timeout: 30000
-        });
-        responseData = response.data;
-      }
-      const parsed = this.parser.parse(responseData);
+      const response = await this.client.post('/', xml, {
+        headers: { 'Content-Type': 'application/xml' },
+        timeout: 30000
+      });
+      const parsed = this.parser.parse(response.data);
       return this.transform(reportName, parsed);
     } catch (error: any) {
       console.error(`Failed to fetch ${reportName}:`, error?.message);

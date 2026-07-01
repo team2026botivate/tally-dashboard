@@ -16,6 +16,7 @@ async function main() {
       role: Role.ADMIN,
       email: 'admin@tallyerp.com',
       isActive: true,
+      pageAccess: ["dashboard", "companies", "company-data", "settings"],
     },
     create: {
       username,
@@ -24,6 +25,7 @@ async function main() {
       role: Role.ADMIN,
       email: 'admin@tallyerp.com',
       isActive: true,
+      pageAccess: ["dashboard", "companies", "company-data", "settings"],
     },
   });
 

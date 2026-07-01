@@ -16,6 +16,12 @@
 .DS_Store
 Thumbs.db
 
+# Next.js build output
+.next/
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
 # Editor directories and files
 .vscode/
 !.vscode/extensions.json
