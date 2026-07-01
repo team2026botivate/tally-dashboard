@@ -40,7 +40,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset } from "@/components/ui/sidebar"
-import { Settings2Icon, UserIcon, PlayIcon, DatabaseIcon, FileTextIcon, RefreshCwIcon } from "lucide-react"
+import { Settings2Icon, UserIcon } from "lucide-react"
 
 interface User {
   id: string

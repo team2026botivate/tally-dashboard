@@ -7,7 +7,7 @@ import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { DataTable } from "@/components/data-table"
 import { TopLedgers } from "@/components/top-ledgers"
 import { StockSummary } from "@/components/stock-summary"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { SidebarInset } from "@/components/ui/sidebar"
 
 export default function DashboardPage() {
   return (

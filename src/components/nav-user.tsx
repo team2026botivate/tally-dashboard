@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-provider"
-import { EllipsisVerticalIcon, CircleUserRoundIcon, Settings2Icon, LogOutIcon } from "lucide-react"
+import { EllipsisVerticalIcon, Settings2Icon, LogOutIcon } from "lucide-react"
 
 export function NavUser({
   user,
