@@ -20,7 +20,6 @@ import {
   DownloadIcon,
   GlobeIcon,
   NetworkIcon,
-  FileTextIcon,
 } from "lucide-react"
 
 interface StepProps {
@@ -70,8 +69,8 @@ function StepCard({ number, title, description, details, icon: Icon, action, isL
                   <DownloadIcon className="size-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-green-800 dark:text-green-300">Ready to download</p>
-                  <p className="text-xs text-green-600/90 dark:text-green-400/90">tally-agent.zip — includes agent script + dependencies</p>
+                  <p className="text-sm font-semibold text-black dark:text-white">Ready to download</p>
+                  <p className="text-xs text-black/70 dark:text-white/70">tally-agent.zip — includes agent script + dependencies</p>
                 </div>
                 <Button
                   className="shrink-0 gap-2 bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-500 text-white shadow-sm"
@@ -187,10 +186,13 @@ export default function TallyConfigurationPage() {
       icon: TerminalIcon,
       details: [
         "Prerequisites: Node.js 18 or later installed on the local machine.",
-        'Clone or download the agent-server/ directory from your project repository to the local machine.',
-        'Open a terminal in the agent-server/ folder and run: npm install.',
-        'Set the CLOUD_URL environment variable to your cloud dashboard URL (e.g., https://tallyprimeone.vercel.app).',
-        'Start the agent with: CLOUD_URL=https://your-app.vercel.app npm run dev.',
+        "Download the tally-agent.zip using the button below and extract it to a folder on your PC.",
+        "Open a terminal (PowerShell on Windows) in the extracted folder and run: npm install.",
+        "Set the CLOUD_URL environment variable to your cloud dashboard URL:",
+        "  — PowerShell: $env:CLOUD_URL=\"https://tallyprimeone.vercel.app\"",
+        "  — CMD: set CLOUD_URL=https://tallyprimeone.vercel.app",
+        "  — macOS/Linux: export CLOUD_URL=https://tallyprimeone.vercel.app",
+        "Start the agent with: npm start.",
         "On first run, the agent will automatically register with the cloud and save credentials to agent-config.json.",
         "The agent will then discover companies from your local Tally and begin syncing data on the configured interval (default: every 5 minutes).",
         "You should see log output showing each sync cycle — ledgers, stock groups, stock items, and vouchers being sent to the cloud.",
@@ -236,15 +238,6 @@ export default function TallyConfigurationPage() {
             {steps.map((step, i) => (
               <StepCard key={i} {...step} router={router} isLast={i === steps.length - 1} />
             ))}
-
-            <Card className="bg-muted/30 border-dashed">
-              <CardContent className="py-6 text-center">
-                <FileTextIcon className="size-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Need help? Refer to the project README or documentation for detailed troubleshooting guides.
-                </p>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </SidebarInset>
