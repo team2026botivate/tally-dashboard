@@ -54,3 +54,9 @@ Set these in `.env.local`:
 | `JWT_SECRET` | Secret for signing auth tokens |
 | `TALLY_HOST` | Tally instance IP |
 | `TALLY_PORT` | Tally XML port (default 9000) |
+
+
+
+cd agent-server
+npm install
+$env:CLOUD_URL="https://tallyprimeone.vercel.app"; npm start
