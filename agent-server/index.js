@@ -110,66 +110,67 @@ function buildCompanyXml() {
 </ENVELOPE>`;
 }
 
-function buildMasterXml(reportName, companyName) {
+function buildLedgerXml(companyName) {
   const escapedCompany = escapeXml(companyName);
   const companyVar = escapedCompany ? `<SVCURRENTCOMPANY>${escapedCompany}</SVCURRENTCOMPANY>` : '';
-  const staticVars = `<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}`;
-
-  const templates = {
-    LedgerList: `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>LedgerList</ID></HEADER>
+  return `<ENVELOPE>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><SUBTYPE>ALL</SUBTYPE><ID>MyLedgers</ID></HEADER>
   <BODY>
     <DESC>
-      <STATICVARIABLES>${staticVars}</STATICVARIABLES>
+      <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}</STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="LedgerList" ISINITIALIZE="No" ISFIXLIST="No" ISALTER="No">
-            <TYPE>Group</TYPE>
-            <FETCH>NAME, PARENT, LEDGERS, GROUPS</FETCH>
-            <CHILDOF>$$Root</CHILDOF>
+          <COLLECTION NAME="MyLedgers" ISINITIALIZE="Yes">
+            <TYPE>Ledger</TYPE>
+            <FETCH>NAME, PARENT, GUID, OPENINGBALANCE, CLOSINGBALANCE, CURRENCYNAME, MAILINGNAME, PINCODE, STATE, COUNTRY, GSTIN, GSTREGISTRATIONTYPE</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
     </DESC>
   </BODY>
-</ENVELOPE>`,
+</ENVELOPE>`;
+}
 
-    StockGroupList: `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>StockGroupList</ID></HEADER>
+function buildStockGroupXml(companyName) {
+  const escapedCompany = escapeXml(companyName);
+  const companyVar = escapedCompany ? `<SVCURRENTCOMPANY>${escapedCompany}</SVCURRENTCOMPANY>` : '';
+  return `<ENVELOPE>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><SUBTYPE>ALL</SUBTYPE><ID>MyStockGroups</ID></HEADER>
   <BODY>
     <DESC>
-      <STATICVARIABLES>${staticVars}</STATICVARIABLES>
+      <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}</STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="StockGroupList" ISINITIALIZE="No" ISFIXLIST="No" ISALTER="No">
-            <TYPE>StockGroup</TYPE>
+          <COLLECTION NAME="MyStockGroups" ISINITIALIZE="Yes">
+            <TYPE>Stock Group</TYPE>
             <FETCH>NAME, PARENT, GUID</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
     </DESC>
   </BODY>
-</ENVELOPE>`,
+</ENVELOPE>`;
+}
 
-    StockItemList: `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>StockItemList</ID></HEADER>
+function buildStockItemXml(companyName) {
+  const escapedCompany = escapeXml(companyName);
+  const companyVar = escapedCompany ? `<SVCURRENTCOMPANY>${escapedCompany}</SVCURRENTCOMPANY>` : '';
+  return `<ENVELOPE>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><SUBTYPE>ALL</SUBTYPE><ID>MyStockItems</ID></HEADER>
   <BODY>
     <DESC>
-      <STATICVARIABLES>${staticVars}</STATICVARIABLES>
+      <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}</STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="StockItemList" ISINITIALIZE="No" ISFIXLIST="No" ISALTER="No">
-            <TYPE>StockItem</TYPE>
-            <FETCH>NAME, PARENT, GUID, UNIT, OPENINGQTY, OPENINGVALUE, CLOSINGQTY, CLOSINGVALUE, RATE, GSTRATE, HSNCODE</FETCH>
+          <COLLECTION NAME="MyStockItems" ISINITIALIZE="Yes">
+            <TYPE>Stock Item</TYPE>
+            <FETCH>NAME, PARENT, GUID, BASEUNITS, OPENINGBALANCE, OPENINGVALUE, CLOSINGBALANCE, CLOSINGVALUE, LASTPURCHASECOST, GSTAPPLICABLE, GSTTYPEOFSUPPLY, HSNCODE</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
     </DESC>
   </BODY>
-</ENVELOPE>`,
-  };
-
-  return templates[reportName];
+</ENVELOPE>`;
 }
 
 function buildVoucherXml(companyName, fromDate, toDate) {
@@ -180,17 +181,18 @@ function buildVoucherXml(companyName, fromDate, toDate) {
   const staticVars = `<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}${dateVars}${dateVars2}`;
 
   return `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>VoucherList</ID></HEADER>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><SUBTYPE>ALL</SUBTYPE><ID>MyVouchers</ID></HEADER>
   <BODY>
     <DESC>
       <STATICVARIABLES>${staticVars}</STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="VoucherList" ISINITIALIZE="No" ISFIXLIST="No" ISALTER="No">
+          <COLLECTION NAME="MyVouchers" ISINITIALIZE="Yes">
             <TYPE>Voucher</TYPE>
-            <FETCH>VOUCHERNUMBER, DATE, VOUCHERTYPENAME, NARRATION, TOTALAMOUNT, GUID, LEDGERENTRIES</FETCH>
-            <FILTERS><FILTER>ISNOTCANCELLED: Yes</FILTER></FILTERS>
+            <FETCH>VOUCHERNUMBER, DATE, VOUCHERTYPENAME, NARRATION, GUID, ALLLEDGERENTRIES</FETCH>
+            <FILTER>ISNOTCANCELLED</FILTER>
           </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="ISNOTCANCELLED">NOT $$IsCancelled</SYSTEM>
         </TDLMESSAGE>
       </TDL>
     </DESC>
@@ -238,6 +240,7 @@ function escapeXml(unsafe) {
 
 function checkErrors(parsed) {
   const messages = parsed?.ENVELOPE?.BODY?.DESC?.TALLYMESSAGE || [];
+  if (!Array.isArray(messages)) return;
   for (const msg of messages) {
     if (msg.LINEERROR && msg.LINEERROR.length > 0) {
       const err = msg.LINEERROR[0]['#text'] || msg.LINEERROR[0];
@@ -246,16 +249,63 @@ function checkErrors(parsed) {
   }
 }
 
+/**
+ * Tally can return collection data in multiple places depending on
+ * the request type. This helper checks all known locations:
+ *  1. BODY.DATA.COLLECTION  (standard EXPORTDATA / TYPE=Data)
+ *  2. BODY.DATA.TALLYMESSAGE[].COLLECTION  (some TDL variants)
+ *  3. BODY.DESC.TALLYMESSAGE[].COLLECTION  (older TYPE=Collection)
+ */
 function collectionItems(parsed, tag) {
-  const dataColl = parsed?.ENVELOPE?.BODY?.DATA?.COLLECTION;
-  if (!dataColl || dataColl.length === 0) return [];
-  const upper = tag.toUpperCase();
-  const lower = tag.toLowerCase();
-  const capitalized = tag.charAt(0).toUpperCase() + tag.slice(1).toLowerCase();
-  const obj = dataColl[0];
-  const items = obj[tag] || obj[upper] || obj[lower] || obj[capitalized];
-  if (!items) return [];
-  return Array.isArray(items) ? items : [items];
+  const envelope = parsed?.ENVELOPE;
+  if (!envelope) return [];
+
+  const tags = [tag, tag.toUpperCase(), tag.toLowerCase(),
+    tag.charAt(0).toUpperCase() + tag.slice(1).toLowerCase()];
+
+  const pick = (obj) => {
+    for (const t of tags) {
+      const v = obj[t];
+      if (v) return Array.isArray(v) ? v : [v];
+    }
+    return null;
+  };
+
+  // 1. BODY.DATA.COLLECTION
+  const dataColl = envelope.BODY?.DATA?.COLLECTION;
+  if (dataColl) {
+    const arr = Array.isArray(dataColl) ? dataColl : [dataColl];
+    for (const c of arr) {
+      const found = pick(c);
+      if (found && found.length > 0) return found;
+    }
+  }
+
+  // 2. BODY.DATA.TALLYMESSAGE[].COLLECTION
+  const dataMsg = envelope.BODY?.DATA?.TALLYMESSAGE;
+  if (dataMsg) {
+    const msgs = Array.isArray(dataMsg) ? dataMsg : [dataMsg];
+    for (const msg of msgs) {
+      const coll = msg.COLLECTION;
+      if (!coll) continue;
+      const found = pick(coll);
+      if (found && found.length > 0) return found;
+    }
+  }
+
+  // 3. BODY.DESC.TALLYMESSAGE[].COLLECTION
+  const descMsg = envelope.BODY?.DESC?.TALLYMESSAGE;
+  if (descMsg) {
+    const msgs = Array.isArray(descMsg) ? descMsg : [descMsg];
+    for (const msg of msgs) {
+      const coll = msg.COLLECTION;
+      if (!coll) continue;
+      const found = pick(coll);
+      if (found && found.length > 0) return found;
+    }
+  }
+
+  return [];
 }
 
 function extractLedgers(parsed) {
@@ -263,31 +313,20 @@ function extractLedgers(parsed) {
   if (!parsed?.ENVELOPE) return ledgers;
   checkErrors(parsed);
 
-  const groups = collectionItems(parsed, 'GROUP');
-  for (const g of groups) {
-    walkGroup(g, null, ledgers);
-  }
-  return ledgers;
-}
-
-function walkGroup(group, rootName, result) {
-  const currentRoot = rootName || val(group, 'NAME');
-  const groupLedgers = group.LEDGER || [];
-  for (const l of (Array.isArray(groupLedgers) ? groupLedgers : [groupLedgers])) {
+  const items = collectionItems(parsed, 'LEDGER');
+  log(`  [debug] LEDGER items in response: ${items.length}`);
+  for (const l of items) {
     if (typeof l !== 'object') continue;
-    result.push({
+    ledgers.push({
       tallyId: val(l, 'GUID', 'NAME'),
       name: val(l, 'NAME'),
-      groupName: val(group, 'NAME'),
-      parentGroup: currentRoot,
+      groupName: val(l, 'PARENT') || 'Primary',
+      parentGroup: val(l, 'PARENT') || 'Primary',
       openingBalance: parseFloat(val(l, 'OPENINGBALANCE') || '0'),
       currentBalance: parseFloat(val(l, 'CLOSINGBALANCE') || '0'),
     });
   }
-  const subGroups = group.GROUP || [];
-  for (const sg of (Array.isArray(subGroups) ? subGroups : [subGroups])) {
-    if (typeof sg === 'object') walkGroup(sg, currentRoot, result);
-  }
+  return ledgers;
 }
 
 function extractStockGroups(parsed) {
@@ -296,6 +335,7 @@ function extractStockGroups(parsed) {
   checkErrors(parsed);
 
   const items = collectionItems(parsed, 'STOCKGROUP');
+  log(`  [debug] STOCKGROUP items in response: ${items.length}`);
   for (const sg of items) {
     if (typeof sg !== 'object') continue;
     groups.push({
@@ -313,17 +353,18 @@ function extractStockItems(parsed) {
   checkErrors(parsed);
 
   const stockItems = collectionItems(parsed, 'STOCKITEM');
+  log(`  [debug] STOCKITEM items in response: ${stockItems.length}`);
   for (const si of stockItems) {
     if (typeof si !== 'object') continue;
     items.push({
       tallyId: val(si, 'GUID', 'NAME'),
       name: val(si, 'NAME'),
-      unit: val(si, 'UNIT') || 'PCS',
-      openingQty: parseFloat(val(si, 'OPENINGQTY') || '0'),
+      unit: val(si, 'BASEUNITS') || val(si, 'UNIT') || 'PCS',
+      openingQty: parseFloat(val(si, 'OPENINGBALANCE') || val(si, 'OPENINGQTY') || '0'),
       openingValue: parseFloat(val(si, 'OPENINGVALUE') || '0'),
-      closingQty: parseFloat(val(si, 'CLOSINGQTY') || '0'),
+      closingQty: parseFloat(val(si, 'CLOSINGBALANCE') || val(si, 'CLOSINGQTY') || '0'),
       closingValue: parseFloat(val(si, 'CLOSINGVALUE') || '0'),
-      rate: parseFloat(val(si, 'RATE') || '0'),
+      rate: parseFloat(val(si, 'LASTPURCHASECOST') || val(si, 'RATE') || '0'),
       gstRate: parseFloat(val(si, 'GSTRATE') || '0'),
       hsnCode: val(si, 'HSNCODE') || null,
       groupName: val(si, 'PARENT') || 'Primary',
@@ -338,16 +379,29 @@ function extractVouchers(parsed) {
   checkErrors(parsed);
 
   const vList = collectionItems(parsed, 'VOUCHER');
+  log(`  [debug] VOUCHER items in response: ${vList.length}`);
   for (const v of vList) {
     if (typeof v !== 'object') continue;
     const guid = val(v, 'GUID', 'VOUCHERNUMBER');
     let entries = [];
+    // ALLLEDGERENTRIES.LIST is the standard Tally key for ledger entries
     if (v['ALLLEDGERENTRIES.LIST']) {
       entries = Array.isArray(v['ALLLEDGERENTRIES.LIST']) ? v['ALLLEDGERENTRIES.LIST'] : [v['ALLLEDGERENTRIES.LIST']];
     } else if (v['LEDGERENTRIES.LIST']) {
       entries = Array.isArray(v['LEDGERENTRIES.LIST']) ? v['LEDGERENTRIES.LIST'] : [v['LEDGERENTRIES.LIST']];
     } else if (v.LEDGERENTRIES?.LEDGERENTRY) {
       entries = Array.isArray(v.LEDGERENTRIES.LEDGERENTRY) ? v.LEDGERENTRIES.LEDGERENTRY : [v.LEDGERENTRIES.LEDGERENTRY];
+    } else if (v.ALLLEDGERENTRIES?.LEDGERENTRY) {
+      entries = Array.isArray(v.ALLLEDGERENTRIES.LEDGERENTRY) ? v.ALLLEDGERENTRIES.LEDGERENTRY : [v.ALLLEDGERENTRIES.LEDGERENTRY];
+    }
+
+    // Calculate total amount from entries if Tally didn't send TOTALAMOUNT
+    let totalAmount = parseFloat(val(v, 'TOTALAMOUNT') || '0');
+    if (totalAmount === 0 && entries.length > 0) {
+      totalAmount = entries.reduce((sum, e) => {
+        const amt = Math.abs(parseFloat(val(e, 'AMOUNT') || '0'));
+        return sum + amt;
+      }, 0) / 2;
     }
 
     vouchers.push({
@@ -356,13 +410,13 @@ function extractVouchers(parsed) {
       date: val(v, 'DATE', 'VOUCHERDATE') || '',
       type: val(v, 'VOUCHERTYPENAME') || '',
       narration: val(v, 'NARRATION') || '',
-      totalAmount: parseFloat(val(v, 'TOTALAMOUNT') || '0'),
+      totalAmount,
       entries: entries.map((e, idx) => ({
         tallyId: `${guid}-${idx}`,
         ledgerId: val(e, 'LEDGERNAME') || '',
         amount: parseFloat(val(e, 'AMOUNT') || '0'),
         type: e['@_ISDEEMEDPOSITIVE'] === 'Yes' ? 'DR' : 'CR',
-      })),
+      })).filter(e => e.ledgerId),
     });
   }
   return vouchers;
@@ -409,10 +463,13 @@ async function sendHeartbeat() {
 
 async function syncLedgers(companyName) {
   log(`  [${companyName}] Fetching ledgers...`);
-  const xml = buildMasterXml('LedgerList', companyName);
+  const xml = buildLedgerXml(companyName);
   const parsed = await fetchFromTally(xml);
   const ledgers = extractLedgers(parsed);
-  if (ledgers.length === 0) return 0;
+  if (ledgers.length === 0) {
+    log(`  [${companyName}] No ledgers found in Tally response`);
+    return 0;
+  }
 
   log(`  [${companyName}] Sending ${ledgers.length} ledgers to cloud...`);
   await axios.post(`${CLOUD_URL}/api/agent/data`, {
@@ -423,10 +480,13 @@ async function syncLedgers(companyName) {
 
 async function syncStockGroups(companyName) {
   log(`  [${companyName}] Fetching stock groups...`);
-  const xml = buildMasterXml('StockGroupList', companyName);
+  const xml = buildStockGroupXml(companyName);
   const parsed = await fetchFromTally(xml);
   const stockGroups = extractStockGroups(parsed);
-  if (stockGroups.length === 0) return 0;
+  if (stockGroups.length === 0) {
+    log(`  [${companyName}] No stock groups found in Tally response`);
+    return 0;
+  }
 
   log(`  [${companyName}] Sending ${stockGroups.length} stock groups to cloud...`);
   await axios.post(`${CLOUD_URL}/api/agent/data`, {
@@ -437,10 +497,13 @@ async function syncStockGroups(companyName) {
 
 async function syncStockItems(companyName) {
   log(`  [${companyName}] Fetching stock items...`);
-  const xml = buildMasterXml('StockItemList', companyName);
+  const xml = buildStockItemXml(companyName);
   const parsed = await fetchFromTally(xml);
   const stockItems = extractStockItems(parsed);
-  if (stockItems.length === 0) return 0;
+  if (stockItems.length === 0) {
+    log(`  [${companyName}] No stock items found in Tally response`);
+    return 0;
+  }
 
   log(`  [${companyName}] Sending ${stockItems.length} stock items to cloud...`);
   await axios.post(`${CLOUD_URL}/api/agent/data`, {
