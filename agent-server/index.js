@@ -1,3 +1,4 @@
+require('dotenv').config();
 const axios = require('axios');
 const { XMLParser } = require('fast-xml-parser');
 const fs = require('fs');

@@ -59,4 +59,7 @@ Set these in `.env.local`:
 
 cd agent-server
 npm install
-$env:CLOUD_URL="https://tallyprimeone.vercel.app"; npm start
+export CLOUD_URL="https://tallyprimeone.vercel.app"
+export TALLY_HOST="Your IP Address"
+export TALLY_PORT="9000"
+npm start
