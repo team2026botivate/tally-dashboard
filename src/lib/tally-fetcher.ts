@@ -59,7 +59,7 @@ export class TallyDataFetcher {
       <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="CompanyList" ISINITIALIZE="No" ISFIXLIST="No">
+          <COLLECTION NAME="CompanyList" ISINITIALIZE="Yes">
             <TYPE>Company</TYPE>
             <FETCH>NAME, GUID</FETCH>
           </COLLECTION>

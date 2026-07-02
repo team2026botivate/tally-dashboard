@@ -18,10 +18,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const fetcher = new TallyDataFetcher(baseConfig);
     const parsed = await fetcher.fetchReport('CompanyInfo');
 
-    const companiesList = parsed?.ENVELOPE?.BODY?.DATA?.COLLECTION?.[0]?.COMPANY || [];
-    const companyNames: string[] = companiesList.map((c: any) =>
-      typeof c.NAME === 'object' ? c.NAME['#text'] : c.NAME
-    ).filter(Boolean);
+    const envelope = parsed?.ENVELOPE;
+    const dataColl = envelope?.BODY?.DATA?.COLLECTION;
+    const arr = dataColl ? (Array.isArray(dataColl) ? dataColl : [dataColl]) : [];
+    
+    let companiesList: any[] = [];
+    for (const c of arr) {
+      const items = c.COMPANY || c.Company || c.company;
+      if (items) {
+        companiesList = Array.isArray(items) ? items : [items];
+        break;
+      }
+    }
+
+    const companyNames: string[] = companiesList.map((c: any) => {
+      const nameVal = c.NAME || c.Name || c.name;
+      if (nameVal != null) {
+        return typeof nameVal === 'object' ? (nameVal['#text'] ?? '') : String(nameVal);
+      }
+      return '';
+    }).filter(Boolean);
 
     if (companyNames.length === 0) {
       return NextResponse.json({ error: 'No companies found on remote Tally instance' }, { status: 404 });
