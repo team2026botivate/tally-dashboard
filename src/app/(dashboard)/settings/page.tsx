@@ -338,7 +338,7 @@ export default function SettingsPage() {
                 </div>
 
                 {testTallyConn.isSuccess && (
-                  <Alert variant="default" className="border-green-500 bg-green-50 dark:bg-green-950">
+                  <Alert variant="default" className="border-green-500/40 bg-green-50/40 dark:bg-transparent text-green-800 dark:text-green-400">
                     <CheckCircle2Icon className="size-4 text-green-600 dark:text-green-400" />
                     <AlertTitle>Connection successful</AlertTitle>
                     <AlertDescription>
@@ -358,7 +358,7 @@ export default function SettingsPage() {
                 )}
 
                 {saveConfig.isSuccess && (
-                  <Alert variant="default" className="border-green-500 bg-green-50 dark:bg-green-950">
+                  <Alert variant="default" className="border-green-500/40 bg-green-50/40 dark:bg-transparent text-green-800 dark:text-green-400">
                     <CheckCircle2Icon className="size-4 text-green-600 dark:text-green-400" />
                     <AlertTitle>Configuration saved</AlertTitle>
                     <AlertDescription>Connection details have been updated successfully.</AlertDescription>
