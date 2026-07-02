@@ -64,17 +64,17 @@ function StepCard({ number, title, description, details, icon: Icon, action, isL
             ))}
           </ul>
           {action && action.variant === "download" ? (
-            <div className="mt-4 rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 p-4">
+            <div className="mt-4 rounded-lg border border-green-200/80 dark:border-green-900/30 bg-green-50/40 dark:bg-transparent p-4">
               <div className="flex items-center gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-green-600 text-white">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400">
                   <DownloadIcon className="size-5" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-green-800 dark:text-green-300">Ready to download</p>
-                  <p className="text-xs text-green-600 dark:text-green-400">tally-agent.zip — includes agent script + dependencies</p>
+                  <p className="text-xs text-green-600/90 dark:text-green-400/90">tally-agent.zip — includes agent script + dependencies</p>
                 </div>
                 <Button
-                  className="shrink-0 gap-2 bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                  className="shrink-0 gap-2 bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-500 text-white shadow-sm"
                   size="default"
                   onClick={() => router.push(action.href)}
                 >
