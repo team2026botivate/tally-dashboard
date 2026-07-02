@@ -32,13 +32,13 @@ export class DataTransformer {
       let idx = 1;
 
       for (const l of batch) {
-        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}::decimal, $${idx + 5}::decimal, $${idx + 6}::timestamp, $${idx + 7})`);
+        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}::decimal, $${idx + 5}::decimal, $${idx + 6}::timestamp, $${idx + 7}, $${idx + 6}::timestamp)`);
         params.push(l.tallyId, companyId, l.name, l.groupName, l.openingBalance, l.currentBalance, new Date(), l.parentGroup || null);
         idx += 8;
       }
 
       await prisma.$executeRawUnsafe(`
-        INSERT INTO "Ledger" ("tallyId", "companyId", "name", "groupName", "openingBalance", "currentBalance", "lastSyncAt", "parentGroup")
+        INSERT INTO "Ledger" ("tallyId", "companyId", "name", "groupName", "openingBalance", "currentBalance", "lastSyncAt", "parentGroup", "updatedAt")
         VALUES ${placeholders.join(', ')}
         ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
           "name" = EXCLUDED."name",
@@ -46,7 +46,8 @@ export class DataTransformer {
           "parentGroup" = EXCLUDED."parentGroup",
           "openingBalance" = EXCLUDED."openingBalance",
           "currentBalance" = EXCLUDED."currentBalance",
-          "lastSyncAt" = EXCLUDED."lastSyncAt"
+          "lastSyncAt" = EXCLUDED."lastSyncAt",
+          "updatedAt" = EXCLUDED."updatedAt"
       `, ...params);
       processed += batch.length;
     }
@@ -67,17 +68,18 @@ export class DataTransformer {
     let idx = 1;
 
     for (const sg of stockGroups) {
-      placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3})`);
+      placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, NOW())`);
       params.push(sg.tallyId, companyId, sg.name, sg.parentGroup || null);
       idx += 4;
     }
 
     await prisma.$executeRawUnsafe(`
-      INSERT INTO "StockGroup" ("tallyId", "companyId", "name", "parentGroup")
+      INSERT INTO "StockGroup" ("tallyId", "companyId", "name", "parentGroup", "updatedAt")
       VALUES ${placeholders.join(', ')}
       ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
         "name" = EXCLUDED."name",
-        "parentGroup" = EXCLUDED."parentGroup"
+        "parentGroup" = EXCLUDED."parentGroup",
+        "updatedAt" = EXCLUDED."updatedAt"
     `, ...params);
 
     return stockGroups.length;
@@ -123,7 +125,7 @@ export class DataTransformer {
           stockGroupMap.set(item.groupName, stockGroupId);
         }
 
-        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}::decimal, $${idx + 5}::decimal, $${idx + 6}::decimal, $${idx + 7}::decimal, $${idx + 8}::decimal, $${idx + 9}::decimal, $${idx + 10}, $${idx + 11}, $${idx + 12}::timestamp)`);
+        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}::decimal, $${idx + 5}::decimal, $${idx + 6}::decimal, $${idx + 7}::decimal, $${idx + 8}::decimal, $${idx + 9}::decimal, $${idx + 10}, $${idx + 11}, $${idx + 12}::timestamp, $${idx + 12}::timestamp)`);
         params.push(
           item.tallyId, companyId, item.name, item.unit,
           item.openingQty, item.openingValue, item.closingQty, item.closingValue,
@@ -138,7 +140,7 @@ export class DataTransformer {
 
       if (placeholders.length > 0) {
         await prisma.$executeRawUnsafe(`
-          INSERT INTO "StockItem" ("tallyId", "companyId", "name", "unit", "openingQty", "openingValue", "closingQty", "closingValue", "rate", "gstRate", "hsnCode", "stockGroupId", "lastSyncAt")
+          INSERT INTO "StockItem" ("tallyId", "companyId", "name", "unit", "openingQty", "openingValue", "closingQty", "closingValue", "rate", "gstRate", "hsnCode", "stockGroupId", "lastSyncAt", "updatedAt")
           VALUES ${placeholders.join(', ')}
           ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
             "name" = EXCLUDED."name",
@@ -151,7 +153,8 @@ export class DataTransformer {
             "gstRate" = EXCLUDED."gstRate",
             "hsnCode" = EXCLUDED."hsnCode",
             "stockGroupId" = EXCLUDED."stockGroupId",
-            "lastSyncAt" = EXCLUDED."lastSyncAt"
+            "lastSyncAt" = EXCLUDED."lastSyncAt",
+            "updatedAt" = EXCLUDED."updatedAt"
         `, ...params);
       }
     }
@@ -211,13 +214,13 @@ export class DataTransformer {
 
       for (const v of batch) {
         const voucherTypeId = voucherTypeMap.get(v.type) || '';
-        vPlaceholders.push(`(gen_random_uuid()::text, $${vIdx}, $${vIdx + 1}, $${vIdx + 2}, $${vIdx + 3}::timestamp, $${vIdx + 4}, $${vIdx + 5}, $${vIdx + 6}::decimal, $${vIdx + 7}::timestamp)`);
+        vPlaceholders.push(`(gen_random_uuid()::text, $${vIdx}, $${vIdx + 1}, $${vIdx + 2}, $${vIdx + 3}::timestamp, $${vIdx + 4}, $${vIdx + 5}, $${vIdx + 6}::decimal, $${vIdx + 7}::timestamp, $${vIdx + 7}::timestamp)`);
         vParams.push(v.tallyId, companyId, v.number, v.date, voucherTypeId, v.narration || '', v.totalAmount, new Date());
         vIdx += 8;
       }
 
       const savedVouchers = await prisma.$queryRawUnsafe<Array<{ id: string; tally_id: string }>>(`
-        INSERT INTO "Voucher" ("id", "tallyId", "companyId", "voucherNumber", "voucherDate", "voucherTypeId", "narration", "totalAmount", "lastSyncAt")
+        INSERT INTO "Voucher" ("id", "tallyId", "companyId", "voucherNumber", "voucherDate", "voucherTypeId", "narration", "totalAmount", "lastSyncAt", "updatedAt")
         VALUES ${vPlaceholders.join(', ')}
         ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
           "voucherNumber" = EXCLUDED."voucherNumber",
@@ -225,7 +228,8 @@ export class DataTransformer {
           "voucherTypeId" = EXCLUDED."voucherTypeId",
           "narration" = EXCLUDED."narration",
           "totalAmount" = EXCLUDED."totalAmount",
-          "lastSyncAt" = EXCLUDED."lastSyncAt"
+          "lastSyncAt" = EXCLUDED."lastSyncAt",
+          "updatedAt" = EXCLUDED."updatedAt"
         RETURNING "id", "tallyId" as tally_id
       `, ...vParams);
 
