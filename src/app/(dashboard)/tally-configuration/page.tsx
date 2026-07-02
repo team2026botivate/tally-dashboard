@@ -175,7 +175,7 @@ export default function TallyConfigurationPage() {
         "The agent will then discover companies from your local Tally and begin syncing data on the configured interval (default: every 5 minutes).",
         "You should see log output showing each sync cycle — ledgers, stock groups, stock items, and vouchers being sent to the cloud.",
       ],
-      action: { label: "Download Agent", href: "#" },
+      action: { label: "Download Agent", href: "/downloads/tally-agent.zip" },
     },
     {
       number: 8,
