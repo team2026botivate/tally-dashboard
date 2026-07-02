@@ -6,7 +6,7 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "tally-app-jwt-secret-2024-super-secure-key"
 );
 
-const publicPaths = ["/login", "/api/auth/login", "/api/health"];
+const publicPaths = ["/login", "/api/auth/login", "/api/health", "/api/config/remote", "/api/agent/"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon") || pathname === "/") {
+  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon") || pathname.startsWith("/downloads") || pathname === "/") {
     return NextResponse.next();
   }
 
