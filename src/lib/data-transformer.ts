@@ -98,7 +98,7 @@ export class DataTransformer {
     const stockGroupMap = new Map<string, string>(stockGroups.map(sg => [sg.name, sg.id]));
 
     let processed = 0;
-    const batchSize = 100;
+    const batchSize = 50;
 
     for (let i = 0; i < stockItems.length; i += batchSize) {
       const batch = stockItems.slice(i, i + batchSize);
@@ -107,8 +107,21 @@ export class DataTransformer {
       let idx = 1;
 
       for (const item of batch) {
-        const stockGroupId = stockGroupMap.get(item.groupName);
-        if (!stockGroupId) continue;
+        let stockGroupId = stockGroupMap.get(item.groupName);
+
+        // Auto-create a 'Primary' stock group if no match found
+        if (!stockGroupId) {
+          let fallbackGroup = await prisma.stockGroup.findFirst({
+            where: { companyId, name: 'Primary' }
+          });
+          if (!fallbackGroup) {
+            fallbackGroup = await prisma.stockGroup.create({
+              data: { tallyId: `primary-${companyId}`, companyId, name: 'Primary', parentGroup: null }
+            });
+          }
+          stockGroupId = fallbackGroup.id;
+          stockGroupMap.set(item.groupName, stockGroupId);
+        }
 
         placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}::decimal, $${idx + 5}::decimal, $${idx + 6}::decimal, $${idx + 7}::decimal, $${idx + 8}::decimal, $${idx + 9}::decimal, $${idx + 10}, $${idx + 11}, $${idx + 12}::timestamp)`);
         params.push(
@@ -198,13 +211,13 @@ export class DataTransformer {
 
       for (const v of batch) {
         const voucherTypeId = voucherTypeMap.get(v.type) || '';
-        vPlaceholders.push(`($${vIdx}, $${vIdx + 1}, $${vIdx + 2}, $${vIdx + 3}::timestamp, $${vIdx + 4}, $${vIdx + 5}, $${vIdx + 6}::decimal, $${vIdx + 7}::timestamp)`);
+        vPlaceholders.push(`(gen_random_uuid()::text, $${vIdx}, $${vIdx + 1}, $${vIdx + 2}, $${vIdx + 3}::timestamp, $${vIdx + 4}, $${vIdx + 5}, $${vIdx + 6}::decimal, $${vIdx + 7}::timestamp)`);
         vParams.push(v.tallyId, companyId, v.number, v.date, voucherTypeId, v.narration || '', v.totalAmount, new Date());
         vIdx += 8;
       }
 
       const savedVouchers = await prisma.$queryRawUnsafe<Array<{ id: string; tally_id: string }>>(`
-        INSERT INTO "Voucher" ("tallyId", "companyId", "voucherNumber", "voucherDate", "voucherTypeId", "narration", "totalAmount", "lastSyncAt")
+        INSERT INTO "Voucher" ("id", "tallyId", "companyId", "voucherNumber", "voucherDate", "voucherTypeId", "narration", "totalAmount", "lastSyncAt")
         VALUES ${vPlaceholders.join(', ')}
         ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
           "voucherNumber" = EXCLUDED."voucherNumber",
@@ -255,13 +268,13 @@ export class DataTransformer {
         let eIdx = 1;
 
         for (const e of allEntries) {
-          ePlaceholders.push(`($${eIdx}, $${eIdx + 1}, $${eIdx + 2}, $${eIdx + 3}, $${eIdx + 4}::decimal, $${eIdx + 5}::"EntryType")`);
+          ePlaceholders.push(`(gen_random_uuid()::text, $${eIdx}, $${eIdx + 1}, $${eIdx + 2}, $${eIdx + 3}, $${eIdx + 4}::decimal, $${eIdx + 5}::"EntryType")`);
           eParams.push(e.tallyId, e.companyId, e.voucherId, e.ledgerId, e.amount, e.entryType);
           eIdx += 6;
         }
 
         await prisma.$executeRawUnsafe(`
-          INSERT INTO "VoucherEntry" ("tallyId", "companyId", "voucherId", "ledgerId", "amount", "entryType")
+          INSERT INTO "VoucherEntry" ("id", "tallyId", "companyId", "voucherId", "ledgerId", "amount", "entryType")
           VALUES ${ePlaceholders.join(', ')}
           ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
             "amount" = EXCLUDED."amount",
@@ -280,26 +293,52 @@ export class DataTransformer {
     if (!data) return ledgers;
 
     try {
-      const processGroup = (group: any, rootGroupName?: string) => {
-        const currentRoot = rootGroupName || group.name;
-        if (group.ledgers) {
-          group.ledgers.forEach((ledger: any) => {
-            ledgers.push({
-              tallyId: ledger.guid || ledger.name,
-              name: ledger.name,
-              groupName: group.name,
-              parentGroup: currentRoot,
-              openingBalance: parseFloat(ledger.openingBalance || 0),
-              currentBalance: parseFloat(ledger.closingBalance || 0)
-            });
-          });
-        }
-        if (group.groups) {
-          group.groups.forEach((g: any) => processGroup(g, currentRoot));
-        }
-      };
+      // Handle flat array from agent (e.g. [{tallyId, name, groupName, ...}])
+      if (Array.isArray(data)) {
+        return data.map((l: any) => ({
+          tallyId: l.tallyId || l.guid || l.name,
+          name: l.name,
+          groupName: l.groupName || 'Primary',
+          parentGroup: l.parentGroup || l.groupName || 'Primary',
+          openingBalance: parseFloat(l.openingBalance || 0),
+          currentBalance: parseFloat(l.currentBalance || l.closingBalance || 0),
+        }));
+      }
 
-      if (data.groups) {
+      // Handle {groups: [...]} where groups contain ledger objects directly
+      if (data.groups && Array.isArray(data.groups)) {
+        const first = data.groups[0];
+        // If items look like ledger objects (have tallyId), it's a flat list wrapped in groups
+        if (first && (first.tallyId || first.guid) && first.name && !first.ledgers && !first.groups) {
+          return data.groups.map((l: any) => ({
+            tallyId: l.tallyId || l.guid || l.name,
+            name: l.name,
+            groupName: l.groupName || 'Primary',
+            parentGroup: l.parentGroup || l.groupName || 'Primary',
+            openingBalance: parseFloat(l.openingBalance || 0),
+            currentBalance: parseFloat(l.currentBalance || l.closingBalance || 0),
+          }));
+        }
+
+        // Handle true tree structure
+        const processGroup = (group: any, rootGroupName?: string) => {
+          const currentRoot = rootGroupName || group.name;
+          if (group.ledgers) {
+            group.ledgers.forEach((ledger: any) => {
+              ledgers.push({
+                tallyId: ledger.guid || ledger.name,
+                name: ledger.name,
+                groupName: group.name,
+                parentGroup: currentRoot,
+                openingBalance: parseFloat(ledger.openingBalance || 0),
+                currentBalance: parseFloat(ledger.closingBalance || ledger.currentBalance || 0)
+              });
+            });
+          }
+          if (group.groups) {
+            group.groups.forEach((g: any) => processGroup(g, currentRoot));
+          }
+        };
         data.groups.forEach((g: any) => processGroup(g));
       } else if (data.ledgers) {
         data.ledgers.forEach((ledger: any) => {
@@ -325,15 +364,19 @@ export class DataTransformer {
     if (!data) return stockGroups;
 
     try {
-      if (data.groups) {
-        data.groups.forEach((sg: any) => {
-          stockGroups.push({
-            tallyId: sg.guid || sg.name,
-            name: sg.name,
-            parentGroup: sg.parentGroup || null
-          });
+      // Handle flat array
+      const source = Array.isArray(data) ? data
+        : (data.groups && Array.isArray(data.groups)) ? data.groups
+        : [];
+
+      source.forEach((sg: any) => {
+        if (!sg || typeof sg !== 'object') return;
+        stockGroups.push({
+          tallyId: sg.tallyId || sg.guid || sg.name,
+          name: sg.name,
+          parentGroup: sg.parentGroup || null
         });
-      }
+      });
     } catch (error) {
       console.error('Error extracting stock groups:', error);
     }
@@ -346,23 +389,27 @@ export class DataTransformer {
     if (!data) return stockItems;
 
     try {
-      if (data.items) {
-        data.items.forEach((item: any) => {
-          stockItems.push({
-            tallyId: item.guid || item.name,
-            name: item.name,
-            unit: item.unit || 'PCS',
-            openingQty: parseFloat(item.openingQty || 0),
-            openingValue: parseFloat(item.openingValue || 0),
-            closingQty: parseFloat(item.closingQty || 0),
-            closingValue: parseFloat(item.closingValue || 0),
-            rate: parseFloat(item.rate || 0),
-            gstRate: parseFloat(item.gstRate || 0),
-            hsnCode: item.hsnCode || null,
-            groupName: data.groupName || 'Primary'
-          });
+      // Handle flat array
+      const source = Array.isArray(data) ? data
+        : (data.items && Array.isArray(data.items)) ? data.items
+        : [];
+
+      source.forEach((item: any) => {
+        if (!item || typeof item !== 'object') return;
+        stockItems.push({
+          tallyId: item.tallyId || item.guid || item.name,
+          name: item.name,
+          unit: item.unit || 'PCS',
+          openingQty: parseFloat(item.openingQty || 0),
+          openingValue: parseFloat(item.openingValue || 0),
+          closingQty: parseFloat(item.closingQty || 0),
+          closingValue: parseFloat(item.closingValue || 0),
+          rate: parseFloat(item.rate || 0),
+          gstRate: parseFloat(item.gstRate || 0),
+          hsnCode: item.hsnCode || null,
+          groupName: item.groupName || data.groupName || 'Primary'
         });
-      }
+      });
     } catch (error) {
       console.error('Error extracting stock items:', error);
     }
