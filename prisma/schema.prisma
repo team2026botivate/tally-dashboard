@@ -3,10 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider      = "postgresql"
-  url           = env("DATABASE_URL")
-  directUrl     = env("DIRECT_URL")
-  relationMode  = "prisma"
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  directUrl    = env("DIRECT_URL")
+  relationMode = "prisma"
 }
 
 model TallyConfiguration {
@@ -31,6 +31,7 @@ model TallyConfiguration {
   stockItems       StockItem[]
   vouchers         Voucher[]
   voucherEntries   VoucherEntry[]
+  syncMetadata     SyncMetadata[]
 }
 
 model Ledger {
@@ -53,6 +54,7 @@ model Ledger {
   voucherEntries VoucherEntry[]
 
   @@unique([tallyId, companyId])
+  @@index([companyId])
   @@index([name])
   @@index([groupName])
 }
@@ -70,6 +72,7 @@ model StockGroup {
   stockItems  StockItem[]
 
   @@unique([tallyId, companyId])
+  @@index([companyId])
 }
 
 model StockItem {
@@ -95,6 +98,7 @@ model StockItem {
   voucherEntries VoucherEntry[]
 
   @@unique([tallyId, companyId])
+  @@index([companyId])
   @@index([name])
 }
 
@@ -123,6 +127,7 @@ model Voucher {
   entries       VoucherEntry[]
 
   @@unique([tallyId, companyId])
+  @@index([companyId])
   @@index([voucherDate])
   @@index([voucherTypeId])
   @@index([voucherNumber])
@@ -147,6 +152,7 @@ model VoucherEntry {
   voucher     Voucher            @relation(fields: [voucherId], references: [id], onDelete: Cascade)
 
   @@unique([tallyId, companyId])
+  @@index([companyId])
   @@index([voucherId])
   @@index([ledgerId])
 }
@@ -165,11 +171,15 @@ model SyncLog {
 }
 
 model SyncMetadata {
-  id                 String   @id @default(cuid())
-  entityType         String   @unique
+  id                 String             @id @default(cuid())
+  entityType         String
+  companyId          String
   lastSyncTime       DateTime
   lastTallyTimestamp String?
-  version            Int      @default(1)
+  version            Int                @default(1)
+  company            TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([entityType, companyId])
 }
 
 model UserProfile {

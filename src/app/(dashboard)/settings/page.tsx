@@ -11,7 +11,7 @@ import {
   useSaveTallyConfig,
   useCreateUser,
 } from "@/lib/hooks/use-settings"
-import { useTriggerSync, useSyncStatus, useSyncLogs } from "@/lib/hooks/use-sync"
+import { useTriggerSync, useTriggerSyncAll, useSyncStatus, useSyncLogs } from "@/lib/hooks/use-sync"
 import { tallyConfigSchema, editUserSchema, createUserSchema, type TallyConfigValues, type EditUserValues, type CreateUserValues } from "@/lib/schemas"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -151,6 +151,7 @@ export default function SettingsPage() {
     handleSync("full")
   })
   const triggerSync = useTriggerSync()
+  const triggerSyncAll = useTriggerSyncAll()
   
   const { data: syncStatus, isLoading: statusLoading } = useSyncStatus()
   const { data: logs = [], isLoading: logsLoading } = useSyncLogs()
@@ -471,6 +472,20 @@ export default function SettingsPage() {
                         </Button>
                       ))}
                     </div>
+
+                    <Button
+                      variant="default"
+                      className="w-full gap-2"
+                      onClick={() => triggerSyncAll.mutate()}
+                      disabled={triggerSyncAll.isPending || !syncStatus?.isConfigured}
+                    >
+                      {triggerSyncAll.isPending ? (
+                        <Loader2Icon className="size-4 animate-spin" />
+                      ) : (
+                        <RefreshCwIcon className="size-4" />
+                      )}
+                      {triggerSyncAll.isPending ? "Syncing all companies..." : "Sync All Companies"}
+                    </Button>
 
                     {/* Latest Sync Table */}
                     {syncStatus?.lastSync && (

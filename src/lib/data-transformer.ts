@@ -22,38 +22,41 @@ export class DataTransformer {
       return 0;
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      let processed = 0;
+    let processed = 0;
+    const batchSize = 100;
 
-      for (const ledger of ledgers) {
-        await tx.ledger.upsert({
-          where: { tallyId_companyId: { tallyId: ledger.tallyId, companyId } },
-          update: {
-            name: ledger.name,
-            groupName: ledger.groupName,
-            parentGroup: ledger.parentGroup,
-            openingBalance: ledger.openingBalance,
-            currentBalance: ledger.currentBalance,
-            lastSyncAt: new Date(),
-            companyId
-          },
-          create: {
-            tallyId: ledger.tallyId,
-            companyId,
-            name: ledger.name,
-            groupName: ledger.groupName,
-            parentGroup: ledger.parentGroup,
-            openingBalance: ledger.openingBalance,
-            currentBalance: ledger.currentBalance
-          }
-        });
-        processed++;
-      }
+    for (let i = 0; i < ledgers.length; i += batchSize) {
+      const batch = ledgers.slice(i, i + batchSize);
 
-      return processed;
-    });
+      await prisma.$transaction(async (tx) => {
+        for (const ledger of batch) {
+          await tx.ledger.upsert({
+            where: { tallyId_companyId: { tallyId: ledger.tallyId, companyId } },
+            update: {
+              name: ledger.name,
+              groupName: ledger.groupName,
+              parentGroup: ledger.parentGroup,
+              openingBalance: ledger.openingBalance,
+              currentBalance: ledger.currentBalance,
+              lastSyncAt: new Date(),
+              companyId
+            },
+            create: {
+              tallyId: ledger.tallyId,
+              companyId,
+              name: ledger.name,
+              groupName: ledger.groupName,
+              parentGroup: ledger.parentGroup,
+              openingBalance: ledger.openingBalance,
+              currentBalance: ledger.currentBalance
+            }
+          });
+          processed++;
+        }
+      });
+    }
 
-    return result;
+    return processed;
   }
 
   async transformAndSaveStockGroups(rawStockGroups: any, companyId: string): Promise<number> {
@@ -64,31 +67,34 @@ export class DataTransformer {
       return 0;
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      let processed = 0;
+    let processed = 0;
+    const batchSize = 100;
 
-      for (const sg of stockGroups) {
-        await tx.stockGroup.upsert({
-          where: { tallyId_companyId: { tallyId: sg.tallyId, companyId } },
-          update: {
-            name: sg.name,
-            parentGroup: sg.parentGroup,
-            companyId
-          },
-          create: {
-            tallyId: sg.tallyId,
-            companyId,
-            name: sg.name,
-            parentGroup: sg.parentGroup
-          }
-        });
-        processed++;
-      }
+    for (let i = 0; i < stockGroups.length; i += batchSize) {
+      const batch = stockGroups.slice(i, i + batchSize);
 
-      return processed;
-    });
+      await prisma.$transaction(async (tx) => {
+        for (const sg of batch) {
+          await tx.stockGroup.upsert({
+            where: { tallyId_companyId: { tallyId: sg.tallyId, companyId } },
+            update: {
+              name: sg.name,
+              parentGroup: sg.parentGroup,
+              companyId
+            },
+            create: {
+              tallyId: sg.tallyId,
+              companyId,
+              name: sg.name,
+              parentGroup: sg.parentGroup
+            }
+          });
+          processed++;
+        }
+      });
+    }
 
-    return result;
+    return processed;
   }
 
   async transformAndSaveStockItems(rawStockItems: any, companyId: string): Promise<number> {
@@ -99,54 +105,62 @@ export class DataTransformer {
       return 0;
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      let processed = 0;
-
-      for (const item of stockItems) {
-        const stockGroup = await tx.stockGroup.findFirst({
-          where: { name: item.groupName, companyId }
-        });
-
-        if (stockGroup) {
-          await tx.stockItem.upsert({
-            where: { tallyId_companyId: { tallyId: item.tallyId, companyId } },
-            update: {
-              name: item.name,
-              unit: item.unit,
-              openingQty: item.openingQty,
-              openingValue: item.openingValue,
-              closingQty: item.closingQty,
-              closingValue: item.closingValue,
-              rate: item.rate,
-              gstRate: item.gstRate,
-              hsnCode: item.hsnCode,
-              stockGroupId: stockGroup.id,
-              lastSyncAt: new Date(),
-              companyId
-            },
-            create: {
-              tallyId: item.tallyId,
-              companyId,
-              name: item.name,
-              unit: item.unit,
-              openingQty: item.openingQty,
-              openingValue: item.openingValue,
-              closingQty: item.closingQty,
-              closingValue: item.closingValue,
-              rate: item.rate,
-              gstRate: item.gstRate,
-              hsnCode: item.hsnCode,
-              stockGroupId: stockGroup.id
-            }
-          });
-          processed++;
-        }
-      }
-
-      return processed;
+    // Fetch all stock groups for this company upfront to avoid N+1 queries in transaction
+    const stockGroups = await prisma.stockGroup.findMany({
+      where: { companyId },
+      select: { id: true, name: true }
     });
+    const stockGroupMap = new Map<string, string>(stockGroups.map(sg => [sg.name, sg.id]));
 
-    return result;
+    let processed = 0;
+    const batchSize = 100;
+
+    for (let i = 0; i < stockItems.length; i += batchSize) {
+      const batch = stockItems.slice(i, i + batchSize);
+
+      await prisma.$transaction(async (tx) => {
+        for (const item of batch) {
+          const stockGroupId = stockGroupMap.get(item.groupName);
+
+          if (stockGroupId) {
+            await tx.stockItem.upsert({
+              where: { tallyId_companyId: { tallyId: item.tallyId, companyId } },
+              update: {
+                name: item.name,
+                unit: item.unit,
+                openingQty: item.openingQty,
+                openingValue: item.openingValue,
+                closingQty: item.closingQty,
+                closingValue: item.closingValue,
+                rate: item.rate,
+                gstRate: item.gstRate,
+                hsnCode: item.hsnCode,
+                stockGroupId: stockGroupId,
+                lastSyncAt: new Date(),
+                companyId
+              },
+              create: {
+                tallyId: item.tallyId,
+                companyId,
+                name: item.name,
+                unit: item.unit,
+                openingQty: item.openingQty,
+                openingValue: item.openingValue,
+                closingQty: item.closingQty,
+                closingValue: item.closingValue,
+                rate: item.rate,
+                gstRate: item.gstRate,
+                hsnCode: item.hsnCode,
+                stockGroupId: stockGroupId
+              }
+            });
+            processed++;
+          }
+        }
+      });
+    }
+
+    return processed;
   }
 
   async transformAndSaveVouchers(rawVouchers: any, companyId: string): Promise<number> {
@@ -157,6 +171,24 @@ export class DataTransformer {
       return 0;
     }
 
+    // Fetch all ledgers for this company upfront to avoid N+1 queries in transaction
+    const ledgers = await prisma.ledger.findMany({
+      where: { companyId },
+      select: { id: true, tallyId: true, name: true }
+    });
+    
+    const ledgerMapByTallyId = new Map<string, string>();
+    const ledgerMapByName = new Map<string, string>();
+    
+    for (const l of ledgers) {
+      if (l.tallyId) ledgerMapByTallyId.set(l.tallyId, l.id);
+      if (l.name) ledgerMapByName.set(l.name, l.id);
+    }
+
+    // Fetch and cache all voucher types
+    const voucherTypes = await prisma.voucherType.findMany();
+    const voucherTypeMap = new Map<string, string>(voucherTypes.map(vt => [vt.name, vt.id]));
+
     let processed = 0;
     const batchSize = 100;
 
@@ -165,11 +197,16 @@ export class DataTransformer {
 
       await prisma.$transaction(async (tx) => {
         for (const voucher of batch) {
-          const voucherType = await tx.voucherType.upsert({
-            where: { name: voucher.type },
-            update: {},
-            create: { name: voucher.type }
-          });
+          let voucherTypeId = voucherTypeMap.get(voucher.type);
+          if (!voucherTypeId) {
+            const vt = await tx.voucherType.upsert({
+              where: { name: voucher.type },
+              update: {},
+              create: { name: voucher.type }
+            });
+            voucherTypeId = vt.id;
+            voucherTypeMap.set(voucher.type, vt.id);
+          }
 
           const savedVoucher = await tx.voucher.upsert({
             where: { tallyId_companyId: { tallyId: voucher.tallyId, companyId } },
@@ -186,24 +223,16 @@ export class DataTransformer {
               companyId,
               voucherNumber: voucher.number,
               voucherDate: voucher.date,
-              voucherTypeId: voucherType.id,
+              voucherTypeId: voucherTypeId,
               narration: voucher.narration,
               totalAmount: voucher.totalAmount
             }
           });
 
           for (const entry of voucher.entries) {
-            const ledger = await tx.ledger.findFirst({
-              where: {
-                companyId,
-                OR: [
-                  { tallyId: entry.ledgerId },
-                  { name: entry.ledgerId }
-                ]
-              }
-            });
+            const ledgerId = ledgerMapByTallyId.get(entry.ledgerId) || ledgerMapByName.get(entry.ledgerId);
 
-            if (ledger) {
+            if (ledgerId) {
               await tx.voucherEntry.upsert({
                 where: { tallyId_companyId: { tallyId: entry.tallyId, companyId } },
                 update: {
@@ -215,7 +244,7 @@ export class DataTransformer {
                   tallyId: entry.tallyId,
                   companyId,
                   voucherId: savedVoucher.id,
-                  ledgerId: ledger.id,
+                  ledgerId: ledgerId,
                   amount: entry.amount,
                   entryType: entry.type
                 }

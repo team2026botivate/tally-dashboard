@@ -7,8 +7,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { configId } = await params;
     const config = await prisma.tallyConfiguration.findUnique({ where: { id: configId } });
     if (!config) return NextResponse.json({ error: 'Configuration not found' }, { status: 404 });
-    new SyncEngine(config).performFullSync(config.id).catch(console.error);
-    return NextResponse.json({ message: 'Full sync started successfully', configId: config.id });
+    const result = await new SyncEngine(config).performFullSync(config.id);
+    return NextResponse.json({ message: 'Full sync completed successfully', configId: config.id, result });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

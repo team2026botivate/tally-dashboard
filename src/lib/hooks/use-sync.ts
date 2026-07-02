@@ -65,6 +65,30 @@ export function useTestConnection() {
   });
 }
 
+export function useTriggerSyncAll() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/tally/sync/all", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "sync all failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast.success(`Sync started for ${data.companiesCount} compan${data.companiesCount === 1 ? 'y' : 'ies'}`);
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["sync"] });
+      }, 3000);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+}
+
 export function useTriggerSync() {
   const queryClient = useQueryClient();
 

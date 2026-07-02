@@ -49,7 +49,7 @@ export class SyncEngine {
       const voucherCount = await this.fetchAndSaveVouchersInBatches(configId);
 
       console.log('Updating sync metadata...');
-      await this.updateSyncMetadata();
+      await this.updateSyncMetadata(configId);
 
       console.log('Updating configuration...');
       await prisma.tallyConfiguration.update({
@@ -94,6 +94,43 @@ export class SyncEngine {
 
       throw error;
     }
+  }
+
+  async performFullSyncAll(): Promise<{ configId: string; result: SyncResult }[]> {
+    const configs = await prisma.tallyConfiguration.findMany({
+      where: { isRemote: false }
+    });
+
+    if (configs.length === 0) {
+      console.log('No Tally configurations found to sync');
+      return [];
+    }
+
+    console.log(`Starting full sync for ${configs.length} companies...`);
+    const results: { configId: string; result: SyncResult }[] = [];
+
+    for (const config of configs) {
+      console.log(`Syncing company: ${config.companyName} (${config.id})`);
+      try {
+        const engine = new SyncEngine(config);
+        const result = await engine.performFullSync(config.id);
+        results.push({ configId: config.id, result });
+        console.log(`Company ${config.companyName} synced successfully`);
+      } catch (error: any) {
+        console.error(`Company ${config.companyName} sync failed:`, error.message);
+        results.push({
+          configId: config.id,
+          result: {
+            success: false,
+            recordsProcessed: 0,
+            details: { ledgers: 0, stockGroups: 0, stockItems: 0, vouchers: 0 }
+          }
+        });
+      }
+    }
+
+    console.log(`Full sync all completed. ${results.filter(r => r.result.success).length}/${configs.length} companies succeeded`);
+    return results;
   }
 
   async performLedgerSync(configId: string): Promise<number> {
@@ -163,7 +200,7 @@ export class SyncEngine {
 
     try {
       const lastSync = await prisma.syncMetadata.findFirst({
-        where: { entityType: 'vouchers' }
+        where: { entityType: 'vouchers', companyId: configId }
       });
 
       const fromDate = lastSync?.lastSyncTime || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -172,9 +209,9 @@ export class SyncEngine {
       const voucherCount = await this.fetchAndSaveVouchersInBatches(configId, fromDate, toDate);
 
       await prisma.syncMetadata.upsert({
-        where: { entityType: 'vouchers' },
+        where: { entityType_companyId: { entityType: 'vouchers', companyId: configId } },
         update: { lastSyncTime: new Date() },
-        create: { entityType: 'vouchers', lastSyncTime: new Date() }
+        create: { entityType: 'vouchers', companyId: configId, lastSyncTime: new Date() }
       });
 
       await prisma.syncLog.update({
@@ -221,15 +258,15 @@ export class SyncEngine {
     return totalProcessed;
   }
 
-  private async updateSyncMetadata(): Promise<void> {
+  private async updateSyncMetadata(configId: string): Promise<void> {
     const now = new Date();
     const entities = ['ledgers', 'stockGroups', 'stockItems', 'vouchers'];
 
     for (const entity of entities) {
       await prisma.syncMetadata.upsert({
-        where: { entityType: entity },
+        where: { entityType_companyId: { entityType: entity, companyId: configId } },
         update: { lastSyncTime: now },
-        create: { entityType: entity, lastSyncTime: now }
+        create: { entityType: entity, companyId: configId, lastSyncTime: now }
       });
     }
   }
