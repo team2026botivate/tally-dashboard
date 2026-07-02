@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
-
 import {
   Card,
   CardContent,
@@ -18,37 +16,11 @@ import {
 } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCompany } from "@/lib/company-provider"
-
-interface TrendRow {
-  date: string
-  voucher_type: string
-  count: number
-  total_amount: string
-}
+import { useChartData } from "@/lib/hooks/use-dashboard"
 
 export function ChartAreaInteractive() {
-  const [data, setData] = useState<TrendRow[]>([])
-  const [loading, setLoading] = useState(true)
-
   const { activeCompany } = useCompany()
-
-  useEffect(() => {
-    if (!activeCompany) return
-    fetch(`/api/dashboard/voucher-trends?days=30&companyId=${activeCompany.id}`)
-      .then((res) => res.json())
-      .then((data) => setData(data))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [activeCompany])
-
-  const byDate: Record<string, { date: string; total: number }> = {}
-  for (const row of data) {
-    if (!byDate[row.date]) byDate[row.date] = { date: row.date, total: 0 }
-    byDate[row.date].total += parseFloat(row.total_amount) || 0
-  }
-  const chartData = Object.values(byDate).sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  )
+  const { chartData, isLoading } = useChartData(activeCompany?.id)
 
   const chartConfig = {
     total: {
@@ -64,7 +36,7 @@ export function ChartAreaInteractive() {
         <CardDescription>Last 30 days</CardDescription>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        {loading ? (
+        {isLoading ? (
           <Skeleton className="h-[250px] w-full" />
         ) : (
           <ChartContainer

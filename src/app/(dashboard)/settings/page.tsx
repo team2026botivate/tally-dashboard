@@ -1,18 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react"
-import { toast } from "sonner"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useCompany } from "@/lib/company-provider"
+import {
+  useUsers,
+  useUpdateUser,
+  useTestTallyConnection,
+  useSaveTallyConfig,
+} from "@/lib/hooks/use-settings"
+import { useTriggerSync, useSyncStatus, useSyncLogs } from "@/lib/hooks/use-sync"
+import { tallyConfigSchema, editUserSchema, type TallyConfigValues, type EditUserValues } from "@/lib/schemas"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Table,
   TableBody,
@@ -28,19 +31,61 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-} from "@/components/ui/sheet"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset } from "@/components/ui/sidebar"
-import { Settings2Icon, UserIcon } from "lucide-react"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Field,
+  FieldLabel,
+  FieldContent,
+  FieldError,
+} from "@/components/ui/field"
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert"
+import { Switch } from "@/components/ui/switch"
+import {
+  Settings2Icon,
+  UserIcon,
+  CheckCircle2Icon,
+  AlertTriangleIcon,
+  RefreshCwIcon,
+  DatabaseIcon,
+  FileTextIcon,
+  FileChartColumnIcon,
+  Loader2Icon,
+  HistoryIcon,
+  ActivityIcon,
+} from "lucide-react"
 
 interface User {
   id: string
@@ -62,335 +107,587 @@ const PAGE_OPTIONS = [
   { id: "settings", label: "Settings" },
 ]
 
+const SYNC_ACTIONS = [
+  { key: "full", label: "Full Sync", icon: RefreshCwIcon },
+  { key: "ledgers", label: "Ledgers", icon: DatabaseIcon },
+  { key: "vouchers", label: "Vouchers", icon: FileTextIcon },
+  { key: "stock", label: "Stock", icon: FileChartColumnIcon },
+]
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
+  COMPLETED: { variant: "default", label: "Completed" },
+  IN_PROGRESS: { variant: "secondary", label: "In Progress" },
+  FAILED: { variant: "destructive", label: "Failed" },
+  PENDING: { variant: "outline", label: "Pending" },
+}
+
+function statusBadge(status: string) {
+  const cfg = statusConfig[status] || { variant: "outline" as const, label: status }
+  return <Badge variant={cfg.variant}>{cfg.label}</Badge>
+}
+
 export default function SettingsPage() {
   const { refreshCompanies } = useCompany()
-  const [users, setUsers] = useState<User[]>([])
-  const [syncing, setSyncing] = useState<string | null>(null)
+  const { data: users = [], isLoading: usersLoading } = useUsers()
+  const updateUser = useUpdateUser()
+  const testTallyConn = useTestTallyConnection()
+  const saveConfig = useSaveTallyConfig(() => refreshCompanies())
+  const triggerSync = useTriggerSync()
+  
+  const { data: syncStatus, isLoading: statusLoading } = useSyncStatus()
+  const { data: logs = [], isLoading: logsLoading } = useSyncLogs()
+  const isInProgress = syncStatus?.lastSync?.status === "IN_PROGRESS"
 
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [editForm, setEditForm] = useState<Partial<User> & { password?: string }>({})
-  const [savingUser, setSavingUser] = useState(false)
+  const [editFormValues, setEditFormValues] = useState<EditUserValues>({
+    name: "",
+    email: "",
+    phoneNumber: "",
+    password: "",
+    role: "VIEWER",
+    isActive: true,
+    pageAccess: [],
+  })
 
-  const [tallyHost, setTallyHost] = useState("localhost")
-  const [tallyPort, setTallyPort] = useState("9000")
-  const [testing, setTesting] = useState(false)
+  const configForm = useForm<TallyConfigValues>({
+    resolver: zodResolver(tallyConfigSchema),
+    defaultValues: { host: "localhost", port: 9000 },
+  })
 
   useEffect(() => {
-    loadUsers()
     fetch("/api/config")
       .then((res) => res.ok ? res.json() : null)
       .then((cfg) => {
-        if (cfg?.host) setTallyHost(cfg.host)
-        if (cfg?.port) setTallyPort(String(cfg.port))
+        if (cfg) {
+          configForm.reset({ host: cfg.host || "localhost", port: Number(cfg.port) || 9000 })
+        }
       })
       .catch(() => {})
   }, [])
 
-  function loadUsers() {
-    fetch("/api/users").then((res) => res.ok ? res.json().then(setUsers) : null).catch(() => toast.error("Failed to load users"))
-  }
-
-  function statusBadge(s: string) {
-    const map: Record<string, string> = {
-      COMPLETED: "bg-green-100 text-green-800",
-      IN_PROGRESS: "bg-blue-100 text-blue-800",
-      FAILED: "bg-red-100 text-red-800",
-      PENDING: "bg-yellow-100 text-yellow-800",
-    }
-    return map[s] || "bg-gray-100 text-gray-800"
-  }
-
   function openEditSheet(user: User) {
     setEditingUser(user)
-    setEditForm({
+    setEditFormValues({
       name: user.name || "",
       email: user.email || "",
       phoneNumber: user.phoneNumber || "",
+      password: "",
       role: user.role,
-      pageAccess: user.pageAccess || [],
       isActive: user.isActive,
-      password: ""
+      pageAccess: user.pageAccess || [],
     })
   }
 
-  async function handleSaveUser() {
+  function handleSaveUser() {
     if (!editingUser) return
-    setSavingUser(true)
-    try {
-      const payload = { ...editForm }
-      if (!payload.password) delete payload.password
-      await fetch(`/api/users/${editingUser.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      toast.success("User updated successfully")
-      setEditingUser(null)
-      loadUsers()
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update user")
-    }
-    setSavingUser(false)
+    const payload = { ...editFormValues }
+    if (!payload.password) delete (payload as any).password
+    updateUser.mutate(
+      { id: editingUser.id, ...payload },
+      { onSuccess: () => setEditingUser(null) }
+    )
   }
 
-  async function handleTestConnection() {
-    setTesting(true)
-    try {
-      const res = await fetch("/api/tally/test-connection", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ host: tallyHost, port: Number(tallyPort) }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success("Tally connected on " + tallyHost + ":" + tallyPort)
-      } else {
-        toast.error(data.error || "Tally not reachable on " + tallyHost + ":" + tallyPort)
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Tally not reachable on " + tallyHost + ":" + tallyPort)
-    }
-    setTesting(false)
-  }
-
-  async function handleSaveConfig() {
-    try {
-      const res = await fetch("/api/config", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ host: tallyHost, port: Number(tallyPort), syncInterval: 600000 }),
-      })
-      const data = await res.json()
-      refreshCompanies()
-      toast.success("Tally configuration saved — " + (data.companies?.length || 0) + " companies found")
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save configuration")
-    }
-  }
-
-  async function handleSync(type: string) {
-    setSyncing(type)
-    try {
-      const path = type === "full" ? "/api/tally/sync/full" : `/api/tally/sync/${type}`
-      await fetch(path, { method: 'POST' })
-      toast.success(`${type} sync started`)
-    } catch (err: any) {
-      toast.error(err.message)
-    }
-    setSyncing(null)
+  function handleSync(type: string) {
+    triggerSync.mutate(type)
   }
 
   return (
     <>
-      <AppSidebar />
+      <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
-        <div className="flex flex-1 flex-col gap-4 pt-4">
-          <Tabs defaultValue="tally" className="mx-4 lg:mx-6">
+        <div className="@container/main flex flex-1 flex-col py-4 md:py-6">
+          <div className="px-4 lg:px-6 mb-2">
+            <div className="flex items-center gap-4">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <Settings2Icon className="size-5" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold md:text-2xl">Settings</h1>
+                <p className="text-sm text-muted-foreground">Manage Tally connection and user accounts</p>
+              </div>
+            </div>
+          </div>
+
+          <Tabs defaultValue="tally" className="px-4 lg:px-6">
             <TabsList>
-              <TabsTrigger value="tally" className="flex items-center gap-2">
-                <Settings2Icon className="size-4" />
-                Tally Configuration
-              </TabsTrigger>
-              <TabsTrigger value="users" className="flex items-center gap-2">
-                <UserIcon className="size-4" />
-                Manage Users
-              </TabsTrigger>
+              <TabsTrigger value="tally">Tally Connection</TabsTrigger>
+              <TabsTrigger value="users">Manage Users</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="tally" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tally Configuration</CardTitle>
-                  <CardDescription>Connect to Tally ERP by providing the host and port</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="host">Host</Label>
-                      <Input id="host" value={tallyHost} onChange={(e) => setTallyHost(e.target.value)} placeholder="localhost" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="port">Port</Label>
-                      <Input id="port" value={tallyPort} onChange={(e) => setTallyPort(e.target.value)} placeholder="9000" />
-                    </div>
-                  </div>
+            <TabsContent value="tally" className="mt-6 space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-base font-semibold mb-1">Connection Details</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Configure how this dashboard connects to your Tally ERP instance</p>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <Field orientation="vertical">
+                    <FieldLabel htmlFor="host">Host</FieldLabel>
+                    <FieldContent>
+                      <Input
+                        id="host"
+                        placeholder="localhost"
+                        {...configForm.register("host")}
+                      />
+                      <FieldError errors={[configForm.formState.errors.host]} />
+                    </FieldContent>
+                  </Field>
+                  <Field orientation="vertical">
+                    <FieldLabel htmlFor="port">Port</FieldLabel>
+                    <FieldContent>
+                      <Input
+                        id="port"
+                        type="number"
+                        placeholder="9000"
+                        {...configForm.register("port", { valueAsNumber: true })}
+                      />
+                      <FieldError errors={[configForm.formState.errors.port]} />
+                    </FieldContent>
+                  </Field>
+                </div>
 
-                  <div className="flex gap-2">
-                    <Button onClick={handleTestConnection} disabled={testing}>
-                      {testing ? "Testing..." : "Test Connection"}
-                    </Button>
-                    <Button onClick={handleSaveConfig}>
-                      Save Configuration
-                    </Button>
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={configForm.handleSubmit((v) => testTallyConn.mutate(v))}
+                    disabled={testTallyConn.isPending}
+                  >
+                    {testTallyConn.isPending && (
+                      <Loader2Icon className="mr-2 size-4 animate-spin" />
+                    )}
+                    Test Connection
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={configForm.handleSubmit((v) => saveConfig.mutate(v))}
+                    disabled={saveConfig.isPending}
+                  >
+                    {saveConfig.isPending ? "Saving..." : "Save Configuration"}
+                  </Button>
+                </div>
 
-                  <Separator className="my-2" />
+                {testTallyConn.isSuccess && (
+                  <Alert variant="default" className="border-green-500 bg-green-50 dark:bg-green-950">
+                    <CheckCircle2Icon className="size-4 text-green-600 dark:text-green-400" />
+                    <AlertTitle>Connection successful</AlertTitle>
+                    <AlertDescription>
+                      Tally ERP responded successfully at {configForm.watch("host")}:{configForm.watch("port")}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
+                {testTallyConn.isError && (
+                  <Alert variant="destructive">
+                    <AlertTriangleIcon className="size-4" />
+                    <AlertTitle>Connection failed</AlertTitle>
+                    <AlertDescription>
+                      {testTallyConn.error?.message || "Could not reach Tally ERP. Check the host and port."}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {saveConfig.isSuccess && (
+                  <Alert variant="default" className="border-green-500 bg-green-50 dark:bg-green-950">
+                    <CheckCircle2Icon className="size-4 text-green-600 dark:text-green-400" />
+                    <AlertTitle>Configuration saved</AlertTitle>
+                    <AlertDescription>Connection details have been updated successfully.</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+
+              <Separator />
+
+              <div>
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <div>
-                    <h3 className="text-sm font-semibold mb-3">Sync Management</h3>
-                    <div className="flex gap-2 flex-wrap mb-3">
-                      <Button onClick={() => handleSync("full")} disabled={syncing !== null}>
-                        {syncing === "full" ? "Syncing..." : "Full Sync"}
-                      </Button>
-                      <Button variant="secondary" onClick={() => handleSync("ledgers")} disabled={syncing !== null}>
-                        {syncing === "ledgers" ? "Syncing..." : "Sync Ledgers"}
-                      </Button>
-                      <Button variant="secondary" onClick={() => handleSync("vouchers")} disabled={syncing !== null}>
-                        {syncing === "vouchers" ? "Syncing..." : "Sync Vouchers"}
-                      </Button>
-                      <Button variant="secondary" onClick={() => handleSync("stock")} disabled={syncing !== null}>
-                        {syncing === "stock" ? "Syncing..." : "Sync Stock"}
-                      </Button>
-                    </div>
+                    <h3 className="text-base font-semibold mb-1">Sync Management</h3>
+                    <p className="text-sm text-muted-foreground">Synchronize data and view operation history from Tally ERP</p>
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="flex items-center gap-3">
+                    {syncStatus?.lastSyncTime && (
+                      <span className="text-sm text-muted-foreground">
+                        Last sync: {new Date(syncStatus.lastSyncTime).toLocaleString("en-IN")}
+                      </span>
+                    )}
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <HistoryIcon className="mr-2 size-4" />
+                          Sync History
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle>Sync History</DialogTitle>
+                          <DialogDescription>View all sync operations</DialogDescription>
+                        </DialogHeader>
+                        <ScrollArea className="max-h-96">
+                          {logsLoading ? (
+                            <div className="space-y-2 p-4">
+                              <Skeleton className="h-8 w-full" />
+                              <Skeleton className="h-8 w-full" />
+                            </div>
+                          ) : logs.length === 0 ? (
+                            <p className="text-sm text-muted-foreground p-4">No sync history available.</p>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Type</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead>Records</TableHead>
+                                  <TableHead>Time</TableHead>
+                                  <TableHead>Error</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {logs.map((log) => (
+                                  <TableRow key={log.id}>
+                                    <TableCell className="font-medium">{log.syncType}</TableCell>
+                                    <TableCell>{statusBadge(log.status)}</TableCell>
+                                    <TableCell>{log.recordsProcessed}</TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {new Date(log.startedAt).toLocaleString("en-IN")}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground max-w-40 truncate">
+                                      {log.errorMessage || "-"}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                        </ScrollArea>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </div>
+
+                {statusLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* In Progress Status Bar */}
+                    {isInProgress && (
+                      <div className="space-y-1.5 p-3 rounded-lg bg-muted/40 border border-border">
+                        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                          <Loader2Icon className="size-4 animate-spin text-primary" />
+                          Synchronization in progress...
+                        </div>
+                        <Progress value={45} className="h-1.5" />
+                      </div>
+                    )}
+
+                    {/* Manual Sync Trigger Grid */}
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {SYNC_ACTIONS.map(({ key, label, icon: Icon }) => (
+                        <Button
+                          key={key}
+                          variant="outline"
+                          className="flex-col h-auto gap-2 py-4"
+                          onClick={() => handleSync(key)}
+                          disabled={triggerSync.isPending || !syncStatus?.isConfigured}
+                        >
+                          {triggerSync.isPending && triggerSync.variables === key ? (
+                            <Loader2Icon className="size-5 animate-spin" />
+                          ) : (
+                            <Icon className="size-5" />
+                          )}
+                          <span className="text-xs font-normal">{label}</span>
+                        </Button>
+                      ))}
+                    </div>
+
+                    {/* Latest Sync Table */}
+                    {syncStatus?.lastSync && (
+                      <div className="pt-2">
+                        <h4 className="text-sm font-semibold mb-2">Latest Operation</h4>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Records</TableHead>
+                              <TableHead>Started</TableHead>
+                              <TableHead>Completed</TableHead>
+                              <TableHead>Error</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            <TableRow>
+                              <TableCell className="font-medium">{syncStatus.lastSync.syncType}</TableCell>
+                              <TableCell>{statusBadge(syncStatus.lastSync.status)}</TableCell>
+                              <TableCell>{syncStatus.lastSync.recordsProcessed}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {new Date(syncStatus.lastSync.startedAt).toLocaleString("en-IN")}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {syncStatus.lastSync.completedAt ? new Date(syncStatus.lastSync.completedAt).toLocaleString("en-IN") : "-"}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground max-w-40 truncate">
+                                {syncStatus.lastSync.errorMessage || "-"}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="users" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Manage Users</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {users.length === 0 ? (
+              <div>
+                <h3 className="text-base font-semibold mb-1">Manage Users</h3>
+                <p className="text-sm text-muted-foreground mb-4">View and edit user accounts</p>
+                {usersLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center gap-4">
+                        <div className="size-9 rounded-full bg-muted animate-pulse" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 w-48 rounded bg-muted animate-pulse" />
+                          <div className="h-3 w-32 rounded bg-muted animate-pulse" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-8">
+                    <UserIcon className="size-8 text-muted-foreground/50" />
                     <p className="text-sm text-muted-foreground">No users found</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Username</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[60px]">Avatar</TableHead>
+                        <TableHead>Username</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell>
+                            <Avatar className="size-9">
+                              <AvatarFallback className="text-xs">
+                                {getInitials(user.name || user.username)}
+                              </AvatarFallback>
+                            </Avatar>
+                          </TableCell>
+                          <TableCell className="font-medium">{user.username}</TableCell>
+                          <TableCell>{user.name || <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell>{user.email || <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize font-normal">
+                              {user.role.toLowerCase()}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {user.isActive ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="size-1.5 rounded-full bg-green-500" />
+                                <span className="text-sm">Active</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <span className="size-1.5 rounded-full bg-muted-foreground" />
+                                <span className="text-sm">Inactive</span>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="outline" size="sm" onClick={() => openEditSheet(user)}>
+                              Edit
+                            </Button>
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {users.map((user) => (
-                          <TableRow key={user.id}>
-                            <TableCell>{user.username}</TableCell>
-                            <TableCell>{user.name || "-"}</TableCell>
-                            <TableCell>{user.email || "-"}</TableCell>
-                            <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
-                            <TableCell className="text-right">
-                              <Button variant="outline" size="sm" onClick={() => openEditSheet(user)}>
-                                Edit
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         </div>
 
-        <Sheet open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-          <SheetContent>
-            <SheetHeader>
-              <SheetTitle>Edit User</SheetTitle>
-              <SheetDescription>Make changes to the user's profile.</SheetDescription>
-            </SheetHeader>
+        <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+              <DialogDescription>Make changes to the user's profile and access permissions.</DialogDescription>
+            </DialogHeader>
             {editingUser && (
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label>Name</Label>
-                  <Input value={editForm.name || ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input type="email" value={editForm.email || ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone Number</Label>
-                  <Input value={editForm.phoneNumber || ""} onChange={(e) => setEditForm({ ...editForm, phoneNumber: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>New Password</Label>
-                  <Input type="password" placeholder="Leave blank to keep current" value={editForm.password || ""} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Role</Label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    value={editForm.role}
-                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value as "ADMIN" | "VIEWER" })}
-                  >
-                    <option value="VIEWER">Viewer</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center space-x-2 pt-2">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={editForm.isActive || false}
-                    onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })}
-                    className="size-4 rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <Label htmlFor="isActive" className="font-normal cursor-pointer">
-                    Account is Active
-                  </Label>
-                </div>
-
-                {editForm.role !== "ADMIN" && (
-                  <div className="space-y-3 pt-2">
-                    <Label>Page Access</Label>
-                    <div className="grid gap-3 border rounded-md p-4">
-                      {PAGE_OPTIONS.map((opt) => {
-                        const hasAccess = editForm.pageAccess?.includes(opt.id)
-                        return (
-                          <div key={opt.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
-                            <Label className="font-medium">
-                              {opt.label}
-                            </Label>
-                            {hasAccess ? (
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => {
-                                  const current = editForm.pageAccess || []
-                                  setEditForm({ ...editForm, pageAccess: current.filter(id => id !== opt.id) })
-                                }}
-                              >
-                                Revoke Access
-                              </Button>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="default"
-                                size="sm"
-                                onClick={() => {
-                                  const current = editForm.pageAccess || []
-                                  setEditForm({ ...editForm, pageAccess: [...current, opt.id] })
-                                }}
-                              >
-                                Provide Access
-                              </Button>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Select which pages this user can view.</p>
+              <div className="space-y-5 py-2">
+                <div className="flex items-center gap-3">
+                  <Avatar className="size-11">
+                    <AvatarFallback className="text-sm">
+                      {getInitials(editingUser.name || editingUser.username)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{editingUser.username}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Created {new Date(editingUser.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Profile Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    <Field orientation="vertical">
+                      <FieldLabel>Name</FieldLabel>
+                      <FieldContent>
+                        <Input
+                          value={editFormValues.name}
+                          onChange={(e) => setEditFormValues({ ...editFormValues, name: e.target.value })}
+                        />
+                      </FieldContent>
+                    </Field>
+
+                    <Field orientation="vertical">
+                      <FieldLabel>Email</FieldLabel>
+                      <FieldContent>
+                        <Input
+                          type="email"
+                          value={editFormValues.email}
+                          onChange={(e) => setEditFormValues({ ...editFormValues, email: e.target.value })}
+                        />
+                      </FieldContent>
+                    </Field>
+
+                    <Field orientation="vertical">
+                      <FieldLabel>Phone Number</FieldLabel>
+                      <FieldContent>
+                        <Input
+                          value={editFormValues.phoneNumber}
+                          onChange={(e) => setEditFormValues({ ...editFormValues, phoneNumber: e.target.value })}
+                        />
+                      </FieldContent>
+                    </Field>
+
+                    <Field orientation="vertical">
+                      <FieldLabel>New Password</FieldLabel>
+                      <FieldContent>
+                        <Input
+                          type="password"
+                          placeholder="Leave blank to keep current"
+                          value={editFormValues.password}
+                          onChange={(e) => setEditFormValues({ ...editFormValues, password: e.target.value })}
+                        />
+                      </FieldContent>
+                    </Field>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Permissions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-4">
+                    <Field orientation="vertical">
+                      <FieldLabel>Role</FieldLabel>
+                      <FieldContent>
+                        <Select
+                          value={editFormValues.role}
+                          onValueChange={(v) => setEditFormValues({ ...editFormValues, role: v as "ADMIN" | "VIEWER" })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="VIEWER">Viewer</SelectItem>
+                            <SelectItem value="ADMIN">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FieldContent>
+                    </Field>
+
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <Label htmlFor="isActive" className="font-medium cursor-pointer">Active Account</Label>
+                        <p className="text-xs text-muted-foreground">Allow this user to log in</p>
+                      </div>
+                      <Switch
+                        id="isActive"
+                        checked={editFormValues.isActive}
+                        onCheckedChange={(checked) => setEditFormValues({ ...editFormValues, isActive: checked })}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {editFormValues.role !== "ADMIN" && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Page Access</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-3">
+                        {PAGE_OPTIONS.map((opt) => {
+                          const checked = editFormValues.pageAccess.includes(opt.id)
+                          return (
+                            <Label
+                              key={opt.id}
+                              className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(val) => {
+                                  setEditFormValues({
+                                    ...editFormValues,
+                                    pageAccess: val
+                                      ? [...editFormValues.pageAccess, opt.id]
+                                      : editFormValues.pageAccess.filter((id) => id !== opt.id),
+                                  })
+                                }}
+                              />
+                              <span className="font-medium text-sm">{opt.label}</span>
+                            </Label>
+                          )
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-3">Select which pages this user can view.</p>
+                    </CardContent>
+                  </Card>
                 )}
               </div>
             )}
-            <SheetFooter>
-              <Button disabled={savingUser} onClick={handleSaveUser}>
-                {savingUser ? "Saving..." : "Save changes"}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEditingUser(null)}>
+                Cancel
               </Button>
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
+              <Button disabled={updateUser.isPending} onClick={handleSaveUser}>
+                {updateUser.isPending && (
+                  <Loader2Icon className="mr-2 size-4 animate-spin" />
+                )}
+                Save changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarInset>
     </>
   )

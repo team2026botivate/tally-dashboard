@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@custom-variant data-active (&[data-state=active], &[data-active=true]);
+@custom-variant data-horizontal (&[data-orientation=horizontal]);
+@custom-variant data-vertical (&[data-orientation=vertical]);
+@custom-variant data-open (&[data-state=open], &[data-open]);
+@custom-variant data-closed (&[data-state=closed]);
+@custom-variant data-checked (&[data-state=checked], &[data-checked]);
+@custom-variant data-unchecked (&[data-state=unchecked]);
+@custom-variant data-selected (&[data-selected]);
+@custom-variant data-disabled (&[data-disabled]);
+@custom-variant data-placeholder (&[data-placeholder]);
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Inter Variable', sans-serif;

@@ -1,59 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react"
 import { useCompany } from "@/lib/company-provider"
+import { useDashboardCards } from "@/lib/hooks/use-dashboard"
 import {
   Card,
+  CardAction,
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-
-interface BalanceRow {
-  category: string
-  balance: number
-}
+import { Badge } from "@/components/ui/badge"
+import { TrendingUpIcon } from "lucide-react"
 
 export function SectionCards() {
-  const [assets, setAssets] = useState<number | null>(null)
-  const [liabilities, setLiabilities] = useState<number | null>(null)
-  const [ledgerCount, setLedgerCount] = useState<number | null>(null)
-  const [voucherCount, setVoucherCount] = useState<number | null>(null)
-
   const { activeCompany } = useCompany()
+  const { assets, liabilities, ledgerCount, voucherCount, isLoading } = useDashboardCards(activeCompany?.id)
 
-  useEffect(() => {
-    if (!activeCompany) return
-    Promise.all([
-      fetch(`/api/dashboard/balance-sheet?companyId=${activeCompany.id}`),
-      fetch(`/api/dashboard/trial-balance?companyId=${activeCompany.id}`),
-      fetch(`/api/dashboard/recent-vouchers?limit=1000&companyId=${activeCompany.id}`),
-    ]).then(async ([bsRes, tbRes, rvRes]) => {
-      const data = await bsRes.json() as BalanceRow[]
-      const tbData = await tbRes.json()
-      const rvData = await rvRes.json()
-      setAssets(data.find((r: BalanceRow) => r.category === "Assets")?.balance ?? 0)
-      setLiabilities(data.find((r: BalanceRow) => r.category === "Liabilities")?.balance ?? 0)
-      setLedgerCount(tbData.length)
-      setVoucherCount(rvData.length)
-    }).catch(() => {})
-  }, [activeCompany])
-
-  function fmt(n: number | null) {
-    if (n === null) return null
+  function fmt(n: number) {
     return new Intl.NumberFormat("en-IN").format(n)
   }
 
   const cards = [
-    { label: "Total Assets", value: fmt(assets), loading: assets === null },
-    { label: "Total Liabilities", value: fmt(liabilities), loading: liabilities === null },
-    { label: "Total Ledgers", value: fmt(ledgerCount), loading: ledgerCount === null },
-    { label: "Vouchers", value: fmt(voucherCount), loading: voucherCount === null },
+    { label: "Total Assets", value: fmt(assets), loading: isLoading },
+    { label: "Total Liabilities", value: fmt(liabilities), loading: isLoading },
+    { label: "Total Ledgers", value: fmt(ledgerCount), loading: isLoading },
+    { label: "Vouchers", value: fmt(voucherCount), loading: isLoading },
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       {cards.map((card) => (
         <Card key={card.label} className="@container/card">
           <CardHeader>
@@ -61,7 +38,18 @@ export function SectionCards() {
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {card.loading ? <Skeleton className="h-8 w-24" /> : card.value}
             </CardTitle>
+            <CardAction>
+              <Badge variant="outline">
+                <TrendingUpIcon />
+                Current
+              </Badge>
+            </CardAction>
           </CardHeader>
+          <CardFooter className="flex-col items-start gap-1.5 text-sm">
+            <div className="text-muted-foreground">
+              {card.label} from {activeCompany?.companyName || "Tally"}
+            </div>
+          </CardFooter>
         </Card>
       ))}
     </div>

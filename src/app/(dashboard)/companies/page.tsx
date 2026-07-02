@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react"
+import { SearchIcon } from "lucide-react"
 import { useCompany } from "@/lib/company-provider"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -9,27 +11,45 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardAction,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset } from "@/components/ui/sidebar"
 import { Building2Icon, ClockIcon, CheckCircle2Icon } from "lucide-react"
 
 export default function CompaniesPage() {
   const { companies, activeCompany, loading, switchCompany } = useCompany()
+  const [search, setSearch] = useState("")
+
+  const filtered = companies.filter((c) =>
+    c.companyName.toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
     <>
-      <AppSidebar />
+      <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col gap-4 pt-4">
-          <div className="px-4 lg:px-6">
-            <h1 className="text-2xl font-semibold">Companies</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Companies detected on your Tally instance
-            </p>
+          <div className="flex items-center justify-between px-4 lg:px-6">
+            <div>
+              <h1 className="text-2xl font-semibold">Companies</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Companies detected on your Tally instance
+              </p>
+            </div>
+            <div className="relative w-48">
+              <SearchIcon className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search companies..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-8"
+              />
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 sm:grid-cols-2 lg:grid-cols-3">
             {loading ? (
@@ -44,12 +64,14 @@ export default function CompaniesPage() {
                   </CardContent>
                 </Card>
               ))
-            ) : companies.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <p className="text-sm text-muted-foreground col-span-full">
-                No companies found. Check your Tally configuration in Settings.
+                {companies.length === 0
+                  ? "No companies found. Check your Tally configuration in Settings."
+                  : "No companies match your search."}
               </p>
             ) : (
-              companies.map((company) => {
+              filtered.map((company) => {
                 const isActive = activeCompany?.companyName === company.companyName
                 return (
                   <Card key={company.id} className={isActive ? "ring-2 ring-primary" : ""}>
@@ -68,7 +90,7 @@ export default function CompaniesPage() {
                       </div>
                       <CardDescription className="flex items-center gap-1">
                         <ClockIcon className="size-3" />
-                        {activeCompany?.companyName === company.companyName && activeCompany?.lastSyncAt
+                        {isActive && activeCompany?.lastSyncAt
                           ? "Last sync: " + new Date(activeCompany.lastSyncAt).toLocaleString("en-IN")
                           : "Not synced yet"}
                       </CardDescription>

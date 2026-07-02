@@ -1,7 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react"
+import { useMemo, useState } from "react"
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  type SortingState,
+  type ColumnDef,
+  flexRender,
+} from "@tanstack/react-table"
+import { ArrowUpDown } from "lucide-react"
 import { useCompany } from "@/lib/company-provider"
+import { useTopLedgers } from "@/lib/hooks/use-dashboard"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Card,
@@ -26,25 +36,63 @@ interface LedgerRow {
 }
 
 export function TopLedgers() {
-  const [data, setData] = useState<LedgerRow[]>([])
-  const [loading, setLoading] = useState(true)
-
   const { activeCompany } = useCompany()
+  const { data = [], isLoading } = useTopLedgers(activeCompany?.id, 5)
+  const [sorting, setSorting] = useState<SortingState>([])
 
-  useEffect(() => {
-    if (!activeCompany) return
-    fetch(`/api/dashboard/top-ledgers?limit=5&companyId=${activeCompany.id}`)
-      .then((res) => res.json())
-      .then((data) => setData(data))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [activeCompany])
+  const columns = useMemo<ColumnDef<LedgerRow>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-1 font-medium"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Name <ArrowUpDown className="size-3" />
+          </button>
+        ),
+      },
+      {
+        accessorKey: "groupName",
+        header: "Group",
+        cell: ({ getValue }) => (
+          <span className="text-muted-foreground">{getValue() as string}</span>
+        ),
+      },
+      {
+        accessorKey: "currentBalance",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-1 font-medium ml-auto"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Balance <ArrowUpDown className="size-3" />
+          </button>
+        ),
+        cell: ({ getValue }) => {
+          const amt = getValue() as string
+          return (
+            <span className="tabular-nums block text-right">
+              {new Intl.NumberFormat("en-IN", {
+                style: "currency", currency: "INR", minimumFractionDigits: 2,
+              }).format(parseFloat(amt) || 0)}
+            </span>
+          )
+        },
+      },
+    ],
+    []
+  )
 
-  function fmt(amt: string) {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency", currency: "INR", minimumFractionDigits: 2,
-    }).format(parseFloat(amt) || 0)
-  }
+  const table = useReactTable({
+    data,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
 
   return (
     <Card>
@@ -53,7 +101,7 @@ export function TopLedgers() {
         <CardDescription>Highest balance accounts</CardDescription>
       </CardHeader>
       <CardContent>
-        {loading ? (
+        {isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-6 w-full" />
@@ -62,27 +110,36 @@ export function TopLedgers() {
         ) : (
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Group</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-              </TableRow>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
             </TableHeader>
             <TableBody>
-              {data.length === 0 && (
+              {table.getRowModel().rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
                     No data
                   </TableCell>
                 </TableRow>
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
               )}
-              {data.map((r) => (
-                <TableRow key={r.name}>
-                  <TableCell className="font-medium">{r.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{r.groupName}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(r.currentBalance)}</TableCell>
-                </TableRow>
-              ))}
             </TableBody>
           </Table>
         )}
