@@ -69,8 +69,8 @@ function StepCard({ number, title, description, details, icon: Icon, action, isL
                   <DownloadIcon className="size-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-black">Ready to download</p>
-                  <p className="text-xs text-black">tally-agent.zip — includes agent script + dependencies</p>
+                  <p className="text-sm font-semibold text-black dark:text-white">Ready to download</p>
+                  <p className="text-xs text-black/70 dark:text-white/70">tally-agent.zip — includes agent script + dependencies</p>
                 </div>
                 <Button
                   className="shrink-0 gap-2 bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-500 text-white shadow-sm"
