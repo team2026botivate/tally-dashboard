@@ -633,8 +633,8 @@ async function main() {
       // Fetch company list from Tally
       log('Discovering companies from Tally...');
       const parsed = await fetchFromTally(buildCompanyXml());
-      const companiesList = parsed?.ENVELOPE?.BODY?.DATA?.COLLECTION?.[0]?.COMPANY || [];
-      const companyNames = companiesList.map(c => typeof c.NAME === 'object' ? c.NAME['#text'] : c.NAME).filter(Boolean);
+      const companiesList = collectionItems(parsed, 'COMPANY');
+      const companyNames = companiesList.map(c => val(c, 'NAME')).filter(Boolean);
 
       if (companyNames.length === 0) {
         log('No companies found on Tally. Retrying...');
