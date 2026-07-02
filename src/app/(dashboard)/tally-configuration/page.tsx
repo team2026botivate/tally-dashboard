@@ -29,7 +29,7 @@ interface StepProps {
   description: string;
   details: string[];
   icon: React.ElementType;
-  action?: { label: string; href: string };
+  action?: { label: string; href: string; variant?: "default" | "download" };
   isLast?: boolean;
 }
 
@@ -63,7 +63,27 @@ function StepCard({ number, title, description, details, icon: Icon, action, isL
               </li>
             ))}
           </ul>
-          {action && (
+          {action && action.variant === "download" ? (
+            <div className="mt-4 rounded-lg border-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-green-600 text-white">
+                  <DownloadIcon className="size-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-green-800 dark:text-green-300">Ready to download</p>
+                  <p className="text-xs text-green-600 dark:text-green-400">tally-agent.zip — includes agent script + dependencies</p>
+                </div>
+                <Button
+                  className="shrink-0 gap-2 bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                  size="default"
+                  onClick={() => router.push(action.href)}
+                >
+                  <DownloadIcon className="size-4" />
+                  {action.label}
+                </Button>
+              </div>
+            </div>
+          ) : action && (
             <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => router.push(action.href)}>
               {action.label}
               <ArrowRightIcon className="size-3" />
@@ -175,7 +195,7 @@ export default function TallyConfigurationPage() {
         "The agent will then discover companies from your local Tally and begin syncing data on the configured interval (default: every 5 minutes).",
         "You should see log output showing each sync cycle — ledgers, stock groups, stock items, and vouchers being sent to the cloud.",
       ],
-      action: { label: "Download Agent", href: "/downloads/tally-agent.zip" },
+      action: { label: "Download Agent", href: "/downloads/tally-agent.zip", variant: "download" },
     },
     {
       number: 8,
