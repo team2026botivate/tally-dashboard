@@ -26,6 +26,7 @@ const titles: Record<string, string> = {
   "/settings": "Settings",
   "/companies": "Companies",
   "/company-data": "Company Data",
+  "/tally-configuration": "Tally Configuration",
 }
 
 export function SiteHeader() {

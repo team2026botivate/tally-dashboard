@@ -109,6 +109,7 @@ const PAGE_OPTIONS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "companies", label: "Companies" },
   { id: "company-data", label: "Company Data" },
+  { id: "tally-configuration", label: "Tally Configuration" },
   { id: "settings", label: "Settings" },
 ]
 

@@ -55,9 +55,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Host and port are required' }, { status: 400 });
     }
 
-    const companyNames = await fetchTallyCompanies(host, Number(port));
-    if (companyNames.length === 0) {
-      return NextResponse.json({ error: 'No companies found on Tally at ' + host + ':' + port }, { status: 404 });
+    let companyNames: string[] = [];
+    let discovered = false;
+
+    try {
+      companyNames = await fetchTallyCompanies(host, Number(port));
+      discovered = true;
+    } catch (err: any) {
+      console.warn('Could not reach Tally from server:', err.message);
     }
 
     await prisma.tallyConfiguration.updateMany({
@@ -66,24 +71,49 @@ export async function POST(request: NextRequest) {
     });
 
     const created: any[] = [];
-    for (let i = 0; i < companyNames.length; i++) {
-      const companyName = companyNames[i];
-      const existing = await prisma.tallyConfiguration.findFirst({ where: { companyName, host, port } });
+
+    if (companyNames.length > 0) {
+      for (let i = 0; i < companyNames.length; i++) {
+        const companyName = companyNames[i];
+        const existing = await prisma.tallyConfiguration.findFirst({ where: { companyName, host, port } });
+        if (existing) {
+          const updated = await prisma.tallyConfiguration.update({
+            where: { id: existing.id },
+            data: { host, port, syncInterval, isActive: i === 0 }
+          });
+          created.push(updated);
+        } else {
+          const newConfig = await prisma.tallyConfiguration.create({
+            data: { host, port, companyName, syncInterval, isActive: i === 0 }
+          });
+          created.push(newConfig);
+        }
+      }
+    } else {
+      const label = `Tally @ ${host}:${port}`;
+      const existing = await prisma.tallyConfiguration.findFirst({ where: { companyName: label, host, port } });
       if (existing) {
         const updated = await prisma.tallyConfiguration.update({
           where: { id: existing.id },
-          data: { host, port, syncInterval, isActive: i === 0 }
+          data: { host, port, syncInterval, isActive: true }
         });
         created.push(updated);
       } else {
         const newConfig = await prisma.tallyConfiguration.create({
-          data: { host, port, companyName, syncInterval, isActive: i === 0 }
+          data: { host, port, companyName: label, syncInterval, isActive: true }
         });
         created.push(newConfig);
       }
     }
 
-    return NextResponse.json({ configs: created, companies: companyNames }, { status: 201 });
+    return NextResponse.json({
+      configs: created,
+      companies: companyNames.length > 0 ? companyNames : undefined,
+      discovered,
+      message: discovered
+        ? `Configuration saved — ${companyNames.length} compan${companyNames.length === 1 ? 'y' : 'ies'} found`
+        : 'Configuration saved. Tally is not reachable from this server. To sync data, run the Tally Agent on your local machine.'
+    }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

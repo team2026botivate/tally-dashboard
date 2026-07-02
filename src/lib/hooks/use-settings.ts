@@ -103,7 +103,12 @@ export function useSaveTallyConfig(onSuccess?: () => void) {
       return data;
     },
     onSuccess: (data) => {
-      toast.success(`Tally configuration saved — ${data.companies?.length ?? 0} companies found`);
+      if (data.discovered) {
+        toast.success(`Tally configuration saved — ${data.companies?.length ?? 0} compan${data.companies?.length === 1 ? 'y' : 'ies'} found`);
+      } else {
+        toast.success('Configuration saved. Tally is not reachable from this server.');
+        toast.info('To sync data, the Tally Agent must run on your local machine.');
+      }
       queryClient.invalidateQueries({ queryKey: ["tally-config"] });
       queryClient.invalidateQueries({ queryKey: ["sync"] });
       onSuccess?.();

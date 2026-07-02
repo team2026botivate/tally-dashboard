@@ -24,6 +24,7 @@ import {
   FilesIcon,
   Building2Icon,
   Settings2Icon,
+  ListChecksIcon,
   CommandIcon,
   RefreshCwIcon,
   ChevronRightIcon,
@@ -90,6 +91,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </SidebarMenuItem>
                   );
                 })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {hasAccess("tally-configuration") && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="Tally Configuration"
+                    size="lg"
+                    isActive={pathname === "/tally-configuration"}
+                    className="text-foreground hover:bg-foreground/5 hover:text-foreground data-active:bg-foreground data-active:text-background data-active:font-semibold hover:data-active:bg-foreground hover:data-active:text-background [&_svg]:text-current data-active:rounded-lg"
+                    onClick={() => router.push("/tally-configuration")}
+                  >
+                    <ListChecksIcon className="size-5!" />
+                    <span className="text-base">Tally Configuration</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

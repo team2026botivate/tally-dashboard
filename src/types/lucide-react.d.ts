@@ -68,5 +68,12 @@ declare module "lucide-react" {
   export const ServerIcon: Icon;
   export const ArrowRightIcon: Icon;
   export const ShieldIcon: Icon;
+  export const ListChecksIcon: Icon;
+  export const WrenchIcon: Icon;
+  export const RadioIcon: Icon;
+  export const TerminalIcon: Icon;
+  export const DownloadIcon: Icon;
+  export const GlobeIcon: Icon;
+  export const NetworkIcon: Icon;
 }
 
