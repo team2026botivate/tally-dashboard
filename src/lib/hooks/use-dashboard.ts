@@ -10,6 +10,7 @@ interface BalanceRow {
 interface LedgerRow {
   name: string;
   groupName: string;
+  parentGroup?: string;
   openingBalance: string;
   currentBalance: string;
 }
