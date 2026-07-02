@@ -6,10 +6,15 @@ import { Role } from '@prisma/client';
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { name, email, phoneNumber, password, role, pageAccess, profilePicture, isActive } = await request.json();
+    const { username, name, email, phoneNumber, password, role, pageAccess, profilePicture, isActive } = await request.json();
 
     const existing = await prisma.userProfile.findUnique({ where: { id } });
     if (!existing) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+    if (username && username !== existing.username) {
+      const usernameExists = await prisma.userProfile.findUnique({ where: { username } });
+      if (usernameExists) return NextResponse.json({ error: 'Username already in use' }, { status: 409 });
+    }
 
     if (email && email !== existing.email) {
       const emailExists = await prisma.userProfile.findUnique({ where: { email } });
@@ -17,6 +22,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const data: any = {};
+    if (username !== undefined) data.username = username;
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email;
     if (phoneNumber !== undefined) data.phoneNumber = phoneNumber;

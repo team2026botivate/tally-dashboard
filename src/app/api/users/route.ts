@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password, name, role, email, phoneNumber } = await request.json();
+    const { username, password, name, role, email, phoneNumber, isActive, pageAccess } = await request.json();
 
     if (!username) return NextResponse.json({ error: 'Username is required' }, { status: 400 });
 
@@ -35,7 +35,9 @@ export async function POST(request: NextRequest) {
         name: name || username,
         email,
         phoneNumber,
-        role: role as Role || 'VIEWER'
+        role: role as Role || 'VIEWER',
+        isActive: isActive !== undefined ? isActive : true,
+        pageAccess: pageAccess || [],
       }
     });
 

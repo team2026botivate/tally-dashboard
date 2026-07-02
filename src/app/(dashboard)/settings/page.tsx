@@ -9,9 +9,10 @@ import {
   useUpdateUser,
   useTestTallyConnection,
   useSaveTallyConfig,
+  useCreateUser,
 } from "@/lib/hooks/use-settings"
 import { useTriggerSync, useSyncStatus, useSyncLogs } from "@/lib/hooks/use-sync"
-import { tallyConfigSchema, editUserSchema, type TallyConfigValues, type EditUserValues } from "@/lib/schemas"
+import { tallyConfigSchema, editUserSchema, createUserSchema, type TallyConfigValues, type EditUserValues, type CreateUserValues } from "@/lib/schemas"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -85,7 +86,11 @@ import {
   Loader2Icon,
   HistoryIcon,
   ActivityIcon,
+  PlusIcon,
+  EyeIcon,
+  EyeOffIcon,
 } from "lucide-react"
+import { toast } from "sonner"
 
 interface User {
   id: string
@@ -139,6 +144,7 @@ export default function SettingsPage() {
   const { refreshCompanies } = useCompany()
   const { data: users = [], isLoading: usersLoading } = useUsers()
   const updateUser = useUpdateUser()
+  const createUser = useCreateUser()
   const testTallyConn = useTestTallyConnection()
   const saveConfig = useSaveTallyConfig(() => {
     refreshCompanies()
@@ -152,6 +158,7 @@ export default function SettingsPage() {
 
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [editFormValues, setEditFormValues] = useState<EditUserValues>({
+    username: "",
     name: "",
     email: "",
     phoneNumber: "",
@@ -160,6 +167,21 @@ export default function SettingsPage() {
     isActive: true,
     pageAccess: [],
   })
+
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [createFormValues, setCreateFormValues] = useState<CreateUserValues>({
+    username: "",
+    password: "",
+    name: "",
+    email: "",
+    phoneNumber: "",
+    role: "VIEWER",
+    isActive: true,
+    pageAccess: [],
+  })
+
+  const [showEditPassword, setShowEditPassword] = useState(false)
+  const [showCreatePassword, setShowCreatePassword] = useState(false)
 
   const configForm = useForm<TallyConfigValues>({
     resolver: zodResolver(tallyConfigSchema),
@@ -179,7 +201,9 @@ export default function SettingsPage() {
 
   function openEditSheet(user: User) {
     setEditingUser(user)
+    setShowEditPassword(false)
     setEditFormValues({
+      username: user.username,
       name: user.name || "",
       email: user.email || "",
       phoneNumber: user.phoneNumber || "",
@@ -194,10 +218,44 @@ export default function SettingsPage() {
     if (!editingUser) return
     const payload = { ...editFormValues }
     if (!payload.password) delete (payload as any).password
+
+    const result = editUserSchema.safeParse(payload)
+    if (!result.success) {
+      const errorMsg = result.error.issues[0].message
+      toast.error(errorMsg)
+      return
+    }
+
     updateUser.mutate(
       { id: editingUser.id, ...payload },
       { onSuccess: () => setEditingUser(null) }
     )
+  }
+
+  function handleCreateUser() {
+    const result = createUserSchema.safeParse(createFormValues)
+    if (!result.success) {
+      const errorMsg = result.error.issues[0].message
+      toast.error(errorMsg)
+      return
+    }
+
+    createUser.mutate(createFormValues, {
+      onSuccess: () => {
+        setCreateDialogOpen(false)
+        setShowCreatePassword(false)
+        setCreateFormValues({
+          username: "",
+          password: "",
+          name: "",
+          email: "",
+          phoneNumber: "",
+          role: "VIEWER",
+          isActive: true,
+          pageAccess: [],
+        })
+      }
+    })
   }
 
   function handleSync(type: string) {
@@ -455,8 +513,16 @@ export default function SettingsPage() {
 
             <TabsContent value="users" className="mt-4">
               <div>
-                <h3 className="text-base font-semibold mb-1">Manage Users</h3>
-                <p className="text-sm text-muted-foreground mb-4">View and edit user accounts</p>
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <div>
+                    <h3 className="text-base font-semibold mb-1">Manage Users</h3>
+                    <p className="text-sm text-muted-foreground">View and edit user accounts</p>
+                  </div>
+                  <Button onClick={() => setCreateDialogOpen(true)}>
+                    <PlusIcon className="mr-2 size-4" />
+                    Add User
+                  </Button>
+                </div>
                 {usersLoading ? (
                   <div className="space-y-3">
                     {[1, 2, 3].map((i) => (
@@ -534,151 +600,188 @@ export default function SettingsPage() {
         </div>
 
         <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="max-w-3xl lg:max-w-4xl">
             <DialogHeader>
               <DialogTitle>Edit User</DialogTitle>
               <DialogDescription>Make changes to the user's profile and access permissions.</DialogDescription>
             </DialogHeader>
             {editingUser && (
-              <div className="space-y-5 py-2">
-                <div className="flex items-center gap-3">
-                  <Avatar className="size-11">
-                    <AvatarFallback className="text-sm">
-                      {getInitials(editingUser.name || editingUser.username)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{editingUser.username}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Created {new Date(editingUser.createdAt).toLocaleDateString()}
-                    </p>
+              <ScrollArea className="max-h-[75vh] pr-4">
+                <div className="space-y-5 py-2">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="size-11">
+                      <AvatarFallback className="text-sm">
+                        {getInitials(editingUser.name || editingUser.username)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{editingUser.username}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Created {new Date(editingUser.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                    {/* Left Column */}
+                    <div className="space-y-5">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Profile Information</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-3">
+                          <Field orientation="vertical">
+                            <FieldLabel>Username</FieldLabel>
+                            <FieldContent>
+                              <Input
+                                value={editFormValues.username}
+                                onChange={(e) => setEditFormValues({ ...editFormValues, username: e.target.value })}
+                              />
+                            </FieldContent>
+                          </Field>
+
+                          <Field orientation="vertical">
+                            <FieldLabel>Name</FieldLabel>
+                            <FieldContent>
+                              <Input
+                                value={editFormValues.name}
+                                onChange={(e) => setEditFormValues({ ...editFormValues, name: e.target.value })}
+                              />
+                            </FieldContent>
+                          </Field>
+
+                          <Field orientation="vertical">
+                            <FieldLabel>Email</FieldLabel>
+                            <FieldContent>
+                              <Input
+                                type="email"
+                                value={editFormValues.email}
+                                onChange={(e) => setEditFormValues({ ...editFormValues, email: e.target.value })}
+                              />
+                            </FieldContent>
+                          </Field>
+
+                          <Field orientation="vertical">
+                            <FieldLabel>Phone Number</FieldLabel>
+                            <FieldContent>
+                              <Input
+                                maxLength={10}
+                                value={editFormValues.phoneNumber || ""}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, "");
+                                  setEditFormValues({ ...editFormValues, phoneNumber: val });
+                                }}
+                                placeholder="10 digit number"
+                              />
+                            </FieldContent>
+                          </Field>
+
+                          <Field orientation="vertical">
+                            <FieldLabel>New Password</FieldLabel>
+                            <FieldContent>
+                              <div className="relative">
+                                <Input
+                                  type={showEditPassword ? "text" : "password"}
+                                  placeholder="Leave blank to keep current"
+                                  value={editFormValues.password}
+                                  onChange={(e) => setEditFormValues({ ...editFormValues, password: e.target.value })}
+                                  className="pr-10"
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                  onClick={() => setShowEditPassword(!showEditPassword)}
+                                >
+                                  {showEditPassword ? (
+                                    <EyeOffIcon className="size-4" />
+                                  ) : (
+                                    <EyeIcon className="size-4" />
+                                  )}
+                                </button>
+                              </div>
+                            </FieldContent>
+                          </Field>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-5">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Permissions</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-4">
+                          <Field orientation="vertical">
+                            <FieldLabel>Role</FieldLabel>
+                            <FieldContent>
+                              <Select
+                                value={editFormValues.role}
+                                onValueChange={(v) => setEditFormValues({ ...editFormValues, role: v as "ADMIN" | "VIEWER" })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="VIEWER">Viewer</SelectItem>
+                                  <SelectItem value="ADMIN">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </FieldContent>
+                          </Field>
+
+                          <div className="flex items-center justify-between rounded-lg border p-3">
+                            <div>
+                              <Label htmlFor="isActive" className="font-medium cursor-pointer">Active Account</Label>
+                              <p className="text-xs text-muted-foreground">Allow this user to log in</p>
+                            </div>
+                            <Switch
+                              id="isActive"
+                              checked={editFormValues.isActive}
+                              onCheckedChange={(checked) => setEditFormValues({ ...editFormValues, isActive: checked })}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Page Access</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid gap-3">
+                            {PAGE_OPTIONS.map((opt) => {
+                              const checked = editFormValues.pageAccess.includes(opt.id)
+                              return (
+                                <Label
+                                  key={opt.id}
+                                  className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(val) => {
+                                      setEditFormValues({
+                                        ...editFormValues,
+                                        pageAccess: val
+                                          ? [...editFormValues.pageAccess, opt.id]
+                                          : editFormValues.pageAccess.filter((id) => id !== opt.id),
+                                      })
+                                    }}
+                                  />
+                                  <span className="font-medium text-sm">{opt.label}</span>
+                                </Label>
+                              )
+                            })}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-3">Select which pages this user can view.</p>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 </div>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Profile Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3">
-                    <Field orientation="vertical">
-                      <FieldLabel>Name</FieldLabel>
-                      <FieldContent>
-                        <Input
-                          value={editFormValues.name}
-                          onChange={(e) => setEditFormValues({ ...editFormValues, name: e.target.value })}
-                        />
-                      </FieldContent>
-                    </Field>
-
-                    <Field orientation="vertical">
-                      <FieldLabel>Email</FieldLabel>
-                      <FieldContent>
-                        <Input
-                          type="email"
-                          value={editFormValues.email}
-                          onChange={(e) => setEditFormValues({ ...editFormValues, email: e.target.value })}
-                        />
-                      </FieldContent>
-                    </Field>
-
-                    <Field orientation="vertical">
-                      <FieldLabel>Phone Number</FieldLabel>
-                      <FieldContent>
-                        <Input
-                          value={editFormValues.phoneNumber}
-                          onChange={(e) => setEditFormValues({ ...editFormValues, phoneNumber: e.target.value })}
-                        />
-                      </FieldContent>
-                    </Field>
-
-                    <Field orientation="vertical">
-                      <FieldLabel>New Password</FieldLabel>
-                      <FieldContent>
-                        <Input
-                          type="password"
-                          placeholder="Leave blank to keep current"
-                          value={editFormValues.password}
-                          onChange={(e) => setEditFormValues({ ...editFormValues, password: e.target.value })}
-                        />
-                      </FieldContent>
-                    </Field>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Permissions</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-4">
-                    <Field orientation="vertical">
-                      <FieldLabel>Role</FieldLabel>
-                      <FieldContent>
-                        <Select
-                          value={editFormValues.role}
-                          onValueChange={(v) => setEditFormValues({ ...editFormValues, role: v as "ADMIN" | "VIEWER" })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="VIEWER">Viewer</SelectItem>
-                            <SelectItem value="ADMIN">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FieldContent>
-                    </Field>
-
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <Label htmlFor="isActive" className="font-medium cursor-pointer">Active Account</Label>
-                        <p className="text-xs text-muted-foreground">Allow this user to log in</p>
-                      </div>
-                      <Switch
-                        id="isActive"
-                        checked={editFormValues.isActive}
-                        onCheckedChange={(checked) => setEditFormValues({ ...editFormValues, isActive: checked })}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {editFormValues.role !== "ADMIN" && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">Page Access</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-3">
-                        {PAGE_OPTIONS.map((opt) => {
-                          const checked = editFormValues.pageAccess.includes(opt.id)
-                          return (
-                            <Label
-                              key={opt.id}
-                              className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
-                            >
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={(val) => {
-                                  setEditFormValues({
-                                    ...editFormValues,
-                                    pageAccess: val
-                                      ? [...editFormValues.pageAccess, opt.id]
-                                      : editFormValues.pageAccess.filter((id) => id !== opt.id),
-                                  })
-                                }}
-                              />
-                              <span className="font-medium text-sm">{opt.label}</span>
-                            </Label>
-                          )
-                        })}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-3">Select which pages this user can view.</p>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              </ScrollArea>
             )}
-            <DialogFooter className="gap-2">
+            <DialogFooter className="gap-2 pt-2 border-t mt-2">
               <Button variant="outline" onClick={() => setEditingUser(null)}>
                 Cancel
               </Button>
@@ -687,6 +790,189 @@ export default function SettingsPage() {
                   <Loader2Icon className="mr-2 size-4 animate-spin" />
                 )}
                 Save changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogContent className="max-w-3xl lg:max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Add New User</DialogTitle>
+              <DialogDescription>Create a new user profile and assign roles and page access.</DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[75vh] pr-4">
+              <div className="space-y-5 py-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                  {/* Left Column */}
+                  <div className="space-y-5">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Profile Information</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid gap-3">
+                        <Field orientation="vertical">
+                          <FieldLabel>Username *</FieldLabel>
+                          <FieldContent>
+                            <Input
+                              value={createFormValues.username}
+                              onChange={(e) => setCreateFormValues({ ...createFormValues, username: e.target.value })}
+                              placeholder="john_doe"
+                            />
+                          </FieldContent>
+                        </Field>
+
+                        <Field orientation="vertical">
+                          <FieldLabel>Password *</FieldLabel>
+                          <FieldContent>
+                            <div className="relative">
+                              <Input
+                                type={showCreatePassword ? "text" : "password"}
+                                value={createFormValues.password}
+                                onChange={(e) => setCreateFormValues({ ...createFormValues, password: e.target.value })}
+                                placeholder="Minimum 6 characters"
+                                className="pr-10"
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                onClick={() => setShowCreatePassword(!showCreatePassword)}
+                              >
+                                {showCreatePassword ? (
+                                  <EyeOffIcon className="size-4" />
+                                ) : (
+                                  <EyeIcon className="size-4" />
+                                )}
+                              </button>
+                            </div>
+                          </FieldContent>
+                        </Field>
+
+                        <Field orientation="vertical">
+                          <FieldLabel>Name</FieldLabel>
+                          <FieldContent>
+                            <Input
+                              value={createFormValues.name}
+                              onChange={(e) => setCreateFormValues({ ...createFormValues, name: e.target.value })}
+                              placeholder="John Doe"
+                            />
+                          </FieldContent>
+                        </Field>
+
+                        <Field orientation="vertical">
+                          <FieldLabel>Email</FieldLabel>
+                          <FieldContent>
+                            <Input
+                              type="email"
+                              value={createFormValues.email}
+                              onChange={(e) => setCreateFormValues({ ...createFormValues, email: e.target.value })}
+                              placeholder="john@example.com"
+                            />
+                          </FieldContent>
+                        </Field>
+
+                        <Field orientation="vertical">
+                          <FieldLabel>Phone Number</FieldLabel>
+                          <FieldContent>
+                            <Input
+                              maxLength={10}
+                              value={createFormValues.phoneNumber || ""}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, "");
+                                setCreateFormValues({ ...createFormValues, phoneNumber: val });
+                              }}
+                              placeholder="10 digit number"
+                            />
+                          </FieldContent>
+                        </Field>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Right Column */}
+                  <div className="space-y-5">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Permissions</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid gap-4">
+                        <Field orientation="vertical">
+                          <FieldLabel>Role</FieldLabel>
+                          <FieldContent>
+                            <Select
+                              value={createFormValues.role}
+                              onValueChange={(v) => setCreateFormValues({ ...createFormValues, role: v as "ADMIN" | "VIEWER" })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="VIEWER">Viewer</SelectItem>
+                                <SelectItem value="ADMIN">Admin</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FieldContent>
+                        </Field>
+
+                        <div className="flex items-center justify-between rounded-lg border p-3">
+                          <div>
+                            <Label htmlFor="createIsActive" className="font-medium cursor-pointer">Active Account</Label>
+                            <p className="text-xs text-muted-foreground">Allow this user to log in</p>
+                          </div>
+                          <Switch
+                            id="createIsActive"
+                            checked={createFormValues.isActive}
+                            onCheckedChange={(checked) => setCreateFormValues({ ...createFormValues, isActive: checked })}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Page Access</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-3">
+                          {PAGE_OPTIONS.map((opt) => {
+                            const checked = createFormValues.pageAccess.includes(opt.id)
+                            return (
+                              <Label
+                                key={opt.id}
+                                className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(val) => {
+                                    setCreateFormValues({
+                                      ...createFormValues,
+                                      pageAccess: val
+                                        ? [...createFormValues.pageAccess, opt.id]
+                                        : createFormValues.pageAccess.filter((id) => id !== opt.id),
+                                    })
+                                  }}
+                                />
+                                <span className="font-medium text-sm">{opt.label}</span>
+                              </Label>
+                            )
+                          })}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-3">Select which pages this user can view.</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+            <DialogFooter className="gap-2 pt-2 border-t mt-2">
+              <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button disabled={createUser.isPending} onClick={handleCreateUser}>
+                {createUser.isPending && (
+                  <Loader2Icon className="mr-2 size-4 animate-spin" />
+                )}
+                Create User
               </Button>
             </DialogFooter>
           </DialogContent>

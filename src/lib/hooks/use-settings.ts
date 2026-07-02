@@ -88,7 +88,6 @@ export function useTestTallyConnection() {
     },
   });
 }
-
 export function useSaveTallyConfig(onSuccess?: () => void) {
   const queryClient = useQueryClient();
 
@@ -108,6 +107,32 @@ export function useSaveTallyConfig(onSuccess?: () => void) {
       queryClient.invalidateQueries({ queryKey: ["tally-config"] });
       queryClient.invalidateQueries({ queryKey: ["sync"] });
       onSuccess?.();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+}
+
+export function useCreateUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create user");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("User created successfully");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (err: Error) => {
       toast.error(err.message);

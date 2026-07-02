@@ -14,10 +14,24 @@ export const tallyConfigSchema = z.object({
 
 export type TallyConfigValues = z.infer<typeof tallyConfigSchema>;
 
-export const editUserSchema = z.object({
+export const createUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
   name: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
-  phoneNumber: z.string().optional(),
+  phoneNumber: z.string().regex(/^\d{10}$/, "Phone number must be exactly 10 digits").optional().or(z.literal("")),
+  role: z.enum(["ADMIN", "VIEWER"]),
+  isActive: z.boolean().default(true),
+  pageAccess: z.array(z.string()).default([]),
+});
+
+export type CreateUserValues = z.infer<typeof createUserSchema>;
+
+export const editUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  name: z.string().optional(),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  phoneNumber: z.string().regex(/^\d{10}$/, "Phone number must be exactly 10 digits").optional().or(z.literal("")),
   password: z.string().optional(),
   role: z.enum(["ADMIN", "VIEWER"]),
   isActive: z.boolean(),
