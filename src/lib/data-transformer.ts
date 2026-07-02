@@ -1,5 +1,4 @@
 import { prisma } from './prisma';
-import { Prisma } from '@prisma/client';
 
 export class DataTransformer {
   private parseTallyDate(dateStr: string): Date {
@@ -28,32 +27,28 @@ export class DataTransformer {
     for (let i = 0; i < ledgers.length; i += batchSize) {
       const batch = ledgers.slice(i, i + batchSize);
 
-      await prisma.$transaction(async (tx) => {
-        for (const ledger of batch) {
-          await tx.ledger.upsert({
-            where: { tallyId_companyId: { tallyId: ledger.tallyId, companyId } },
-            update: {
-              name: ledger.name,
-              groupName: ledger.groupName,
-              parentGroup: ledger.parentGroup,
-              openingBalance: ledger.openingBalance,
-              currentBalance: ledger.currentBalance,
-              lastSyncAt: new Date(),
-              companyId
-            },
-            create: {
-              tallyId: ledger.tallyId,
-              companyId,
-              name: ledger.name,
-              groupName: ledger.groupName,
-              parentGroup: ledger.parentGroup,
-              openingBalance: ledger.openingBalance,
-              currentBalance: ledger.currentBalance
-            }
-          });
-          processed++;
-        }
-      });
+      const params: any[] = [];
+      const placeholders: string[] = [];
+      let idx = 1;
+
+      for (const l of batch) {
+        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}::decimal, $${idx + 5}::decimal, $${idx + 6}::timestamp, $${idx + 7})`);
+        params.push(l.tallyId, companyId, l.name, l.groupName, l.openingBalance, l.currentBalance, new Date(), l.parentGroup || null);
+        idx += 8;
+      }
+
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO "Ledger" ("tallyId", "companyId", "name", "groupName", "openingBalance", "currentBalance", "lastSyncAt", "parentGroup")
+        VALUES ${placeholders.join(', ')}
+        ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
+          "name" = EXCLUDED."name",
+          "groupName" = EXCLUDED."groupName",
+          "parentGroup" = EXCLUDED."parentGroup",
+          "openingBalance" = EXCLUDED."openingBalance",
+          "currentBalance" = EXCLUDED."currentBalance",
+          "lastSyncAt" = EXCLUDED."lastSyncAt"
+      `, ...params);
+      processed += batch.length;
     }
 
     return processed;
@@ -67,34 +62,25 @@ export class DataTransformer {
       return 0;
     }
 
-    let processed = 0;
-    const batchSize = 100;
+    const params: any[] = [];
+    const placeholders: string[] = [];
+    let idx = 1;
 
-    for (let i = 0; i < stockGroups.length; i += batchSize) {
-      const batch = stockGroups.slice(i, i + batchSize);
-
-      await prisma.$transaction(async (tx) => {
-        for (const sg of batch) {
-          await tx.stockGroup.upsert({
-            where: { tallyId_companyId: { tallyId: sg.tallyId, companyId } },
-            update: {
-              name: sg.name,
-              parentGroup: sg.parentGroup,
-              companyId
-            },
-            create: {
-              tallyId: sg.tallyId,
-              companyId,
-              name: sg.name,
-              parentGroup: sg.parentGroup
-            }
-          });
-          processed++;
-        }
-      });
+    for (const sg of stockGroups) {
+      placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3})`);
+      params.push(sg.tallyId, companyId, sg.name, sg.parentGroup || null);
+      idx += 4;
     }
 
-    return processed;
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "StockGroup" ("tallyId", "companyId", "name", "parentGroup")
+      VALUES ${placeholders.join(', ')}
+      ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
+        "name" = EXCLUDED."name",
+        "parentGroup" = EXCLUDED."parentGroup"
+    `, ...params);
+
+    return stockGroups.length;
   }
 
   async transformAndSaveStockItems(rawStockItems: any, companyId: string): Promise<number> {
@@ -105,7 +91,6 @@ export class DataTransformer {
       return 0;
     }
 
-    // Fetch all stock groups for this company upfront to avoid N+1 queries in transaction
     const stockGroups = await prisma.stockGroup.findMany({
       where: { companyId },
       select: { id: true, name: true }
@@ -117,47 +102,45 @@ export class DataTransformer {
 
     for (let i = 0; i < stockItems.length; i += batchSize) {
       const batch = stockItems.slice(i, i + batchSize);
+      const params: any[] = [];
+      const placeholders: string[] = [];
+      let idx = 1;
 
-      await prisma.$transaction(async (tx) => {
-        for (const item of batch) {
-          const stockGroupId = stockGroupMap.get(item.groupName);
+      for (const item of batch) {
+        const stockGroupId = stockGroupMap.get(item.groupName);
+        if (!stockGroupId) continue;
 
-          if (stockGroupId) {
-            await tx.stockItem.upsert({
-              where: { tallyId_companyId: { tallyId: item.tallyId, companyId } },
-              update: {
-                name: item.name,
-                unit: item.unit,
-                openingQty: item.openingQty,
-                openingValue: item.openingValue,
-                closingQty: item.closingQty,
-                closingValue: item.closingValue,
-                rate: item.rate,
-                gstRate: item.gstRate,
-                hsnCode: item.hsnCode,
-                stockGroupId: stockGroupId,
-                lastSyncAt: new Date(),
-                companyId
-              },
-              create: {
-                tallyId: item.tallyId,
-                companyId,
-                name: item.name,
-                unit: item.unit,
-                openingQty: item.openingQty,
-                openingValue: item.openingValue,
-                closingQty: item.closingQty,
-                closingValue: item.closingValue,
-                rate: item.rate,
-                gstRate: item.gstRate,
-                hsnCode: item.hsnCode,
-                stockGroupId: stockGroupId
-              }
-            });
-            processed++;
-          }
-        }
-      });
+        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}::decimal, $${idx + 5}::decimal, $${idx + 6}::decimal, $${idx + 7}::decimal, $${idx + 8}::decimal, $${idx + 9}::decimal, $${idx + 10}, $${idx + 11}, $${idx + 12}::timestamp)`);
+        params.push(
+          item.tallyId, companyId, item.name, item.unit,
+          item.openingQty, item.openingValue, item.closingQty, item.closingValue,
+          item.rate, item.gstRate,
+          item.hsnCode || null,
+          stockGroupId,
+          new Date()
+        );
+        idx += 13;
+        processed++;
+      }
+
+      if (placeholders.length > 0) {
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO "StockItem" ("tallyId", "companyId", "name", "unit", "openingQty", "openingValue", "closingQty", "closingValue", "rate", "gstRate", "hsnCode", "stockGroupId", "lastSyncAt")
+          VALUES ${placeholders.join(', ')}
+          ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
+            "name" = EXCLUDED."name",
+            "unit" = EXCLUDED."unit",
+            "openingQty" = EXCLUDED."openingQty",
+            "openingValue" = EXCLUDED."openingValue",
+            "closingQty" = EXCLUDED."closingQty",
+            "closingValue" = EXCLUDED."closingValue",
+            "rate" = EXCLUDED."rate",
+            "gstRate" = EXCLUDED."gstRate",
+            "hsnCode" = EXCLUDED."hsnCode",
+            "stockGroupId" = EXCLUDED."stockGroupId",
+            "lastSyncAt" = EXCLUDED."lastSyncAt"
+        `, ...params);
+      }
     }
 
     return processed;
@@ -171,23 +154,37 @@ export class DataTransformer {
       return 0;
     }
 
-    // Fetch all ledgers for this company upfront to avoid N+1 queries in transaction
     const ledgers = await prisma.ledger.findMany({
       where: { companyId },
       select: { id: true, tallyId: true, name: true }
     });
-    
+
     const ledgerMapByTallyId = new Map<string, string>();
     const ledgerMapByName = new Map<string, string>();
-    
     for (const l of ledgers) {
       if (l.tallyId) ledgerMapByTallyId.set(l.tallyId, l.id);
       if (l.name) ledgerMapByName.set(l.name, l.id);
     }
 
-    // Fetch and cache all voucher types
-    const voucherTypes = await prisma.voucherType.findMany();
-    const voucherTypeMap = new Map<string, string>(voucherTypes.map(vt => [vt.name, vt.id]));
+    const existingVoucherTypes = await prisma.voucherType.findMany();
+    const voucherTypeMap = new Map<string, string>(existingVoucherTypes.map(vt => [vt.name, vt.id]));
+
+    const missingTypes = [...new Set(vouchers.map(v => v.type).filter(t => t && !voucherTypeMap.has(t)))];
+    if (missingTypes.length > 0) {
+      await prisma.$transaction(
+        missingTypes.map(name =>
+          prisma.voucherType.upsert({
+            where: { name },
+            update: {},
+            create: { name }
+          })
+        )
+      );
+      const updatedTypes = await prisma.voucherType.findMany();
+      for (const vt of updatedTypes) {
+        voucherTypeMap.set(vt.name, vt.id);
+      }
+    }
 
     let processed = 0;
     const batchSize = 100;
@@ -195,66 +192,84 @@ export class DataTransformer {
     for (let i = 0; i < vouchers.length; i += batchSize) {
       const batch = vouchers.slice(i, i + batchSize);
 
-      await prisma.$transaction(async (tx) => {
-        for (const voucher of batch) {
-          let voucherTypeId = voucherTypeMap.get(voucher.type);
-          if (!voucherTypeId) {
-            const vt = await tx.voucherType.upsert({
-              where: { name: voucher.type },
-              update: {},
-              create: { name: voucher.type }
-            });
-            voucherTypeId = vt.id;
-            voucherTypeMap.set(voucher.type, vt.id);
-          }
+      const vParams: any[] = [];
+      const vPlaceholders: string[] = [];
+      let vIdx = 1;
 
-          const savedVoucher = await tx.voucher.upsert({
-            where: { tallyId_companyId: { tallyId: voucher.tallyId, companyId } },
-            update: {
-              voucherNumber: voucher.number,
-              voucherDate: voucher.date,
-              narration: voucher.narration,
-              totalAmount: voucher.totalAmount,
-              lastSyncAt: new Date(),
-              companyId
-            },
-            create: {
-              tallyId: voucher.tallyId,
-              companyId,
-              voucherNumber: voucher.number,
-              voucherDate: voucher.date,
-              voucherTypeId: voucherTypeId,
-              narration: voucher.narration,
-              totalAmount: voucher.totalAmount
-            }
+      for (const v of batch) {
+        const voucherTypeId = voucherTypeMap.get(v.type) || '';
+        vPlaceholders.push(`($${vIdx}, $${vIdx + 1}, $${vIdx + 2}, $${vIdx + 3}::timestamp, $${vIdx + 4}, $${vIdx + 5}, $${vIdx + 6}::decimal, $${vIdx + 7}::timestamp)`);
+        vParams.push(v.tallyId, companyId, v.number, v.date, voucherTypeId, v.narration || '', v.totalAmount, new Date());
+        vIdx += 8;
+      }
+
+      const savedVouchers = await prisma.$queryRawUnsafe<Array<{ id: string; tally_id: string }>>(`
+        INSERT INTO "Voucher" ("tallyId", "companyId", "voucherNumber", "voucherDate", "voucherTypeId", "narration", "totalAmount", "lastSyncAt")
+        VALUES ${vPlaceholders.join(', ')}
+        ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
+          "voucherNumber" = EXCLUDED."voucherNumber",
+          "voucherDate" = EXCLUDED."voucherDate",
+          "voucherTypeId" = EXCLUDED."voucherTypeId",
+          "narration" = EXCLUDED."narration",
+          "totalAmount" = EXCLUDED."totalAmount",
+          "lastSyncAt" = EXCLUDED."lastSyncAt"
+        RETURNING "id", "tallyId" as tally_id
+      `, ...vParams);
+
+      const voucherIdMap = new Map<string, string>();
+      for (const sv of savedVouchers) {
+        voucherIdMap.set(sv.tally_id, sv.id);
+      }
+
+      const allEntries: Array<{
+        tallyId: string;
+        companyId: string;
+        voucherId: string;
+        ledgerId: string;
+        amount: number;
+        entryType: string;
+      }> = [];
+
+      for (const v of batch) {
+        const savedId = voucherIdMap.get(v.tallyId);
+        if (!savedId) continue;
+
+        for (const entry of v.entries) {
+          const ledgerId = ledgerMapByTallyId.get(entry.ledgerId) || ledgerMapByName.get(entry.ledgerId);
+          if (!ledgerId) continue;
+
+          allEntries.push({
+            tallyId: entry.tallyId,
+            companyId,
+            voucherId: savedId,
+            ledgerId,
+            amount: entry.amount,
+            entryType: entry.type,
           });
-
-          for (const entry of voucher.entries) {
-            const ledgerId = ledgerMapByTallyId.get(entry.ledgerId) || ledgerMapByName.get(entry.ledgerId);
-
-            if (ledgerId) {
-              await tx.voucherEntry.upsert({
-                where: { tallyId_companyId: { tallyId: entry.tallyId, companyId } },
-                update: {
-                  amount: entry.amount,
-                  entryType: entry.type,
-                  companyId
-                },
-                create: {
-                  tallyId: entry.tallyId,
-                  companyId,
-                  voucherId: savedVoucher.id,
-                  ledgerId: ledgerId,
-                  amount: entry.amount,
-                  entryType: entry.type
-                }
-              });
-            }
-          }
-
-          processed++;
         }
-      });
+      }
+
+      if (allEntries.length > 0) {
+        const eParams: any[] = [];
+        const ePlaceholders: string[] = [];
+        let eIdx = 1;
+
+        for (const e of allEntries) {
+          ePlaceholders.push(`($${eIdx}, $${eIdx + 1}, $${eIdx + 2}, $${eIdx + 3}, $${eIdx + 4}::decimal, $${eIdx + 5}::"EntryType")`);
+          eParams.push(e.tallyId, e.companyId, e.voucherId, e.ledgerId, e.amount, e.entryType);
+          eIdx += 6;
+        }
+
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO "VoucherEntry" ("tallyId", "companyId", "voucherId", "ledgerId", "amount", "entryType")
+          VALUES ${ePlaceholders.join(', ')}
+          ON CONFLICT ("tallyId", "companyId") DO UPDATE SET
+            "amount" = EXCLUDED."amount",
+            "entryType" = EXCLUDED."entryType"
+        `, ...eParams);
+      }
+
+      processed += batch.length;
     }
 
     return processed;
@@ -262,7 +277,6 @@ export class DataTransformer {
 
   private extractLedgers(data: any): any[] {
     const ledgers: any[] = [];
-
     if (!data) return ledgers;
 
     try {
@@ -308,7 +322,6 @@ export class DataTransformer {
 
   private extractStockGroups(data: any): any[] {
     const stockGroups: any[] = [];
-
     if (!data) return stockGroups;
 
     try {
@@ -330,7 +343,6 @@ export class DataTransformer {
 
   private extractStockItems(data: any): any[] {
     const stockItems: any[] = [];
-
     if (!data) return stockItems;
 
     try {
@@ -360,7 +372,6 @@ export class DataTransformer {
 
   private extractVouchers(data: any): any[] {
     const vouchers: any[] = [];
-
     if (!data) return vouchers;
 
     try {

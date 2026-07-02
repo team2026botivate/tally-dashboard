@@ -32,31 +32,32 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [activeCompany, setActiveCompany] = useState<TallyConfig | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshCompanies = useCallback(() => {
+  const refreshCompanies = useCallback(async () => {
     setLoading(true);
 
-    fetch("/api/tally/companies")
-      .then((res) => res.ok ? res.json() : [])
-      .then((data) => setCompanies(data))
-      .catch(() => {
-        fetch("/api/config/all")
-          .then((res) => res.ok ? res.json() : [])
-          .then((data) => {
-            const configs = data || [];
-            setCompanies(configs.map((c: any, i: number) => ({
-              id: c.id || `cfg-${i}`,
-              companyName: c.companyName
-            })));
-          })
-          .catch(() => setCompanies([]));
-      })
-      .finally(() => {
-        fetch("/api/config")
-          .then((res) => res.ok ? res.json() : null)
-          .then((data) => setActiveCompany(data || null))
-          .catch(() => setActiveCompany(null))
-          .finally(() => setLoading(false));
-      });
+    const [companiesResult, configResult] = await Promise.allSettled([
+      fetch("/api/tally/companies").then(r => r.ok ? r.json() : []),
+      fetch("/api/config").then(r => r.ok ? r.json() : null),
+    ]);
+
+    if (companiesResult.status === 'fulfilled' && Array.isArray(companiesResult.value) && companiesResult.value.length > 0) {
+      setCompanies(companiesResult.value);
+    } else {
+      try {
+        const allRes = await fetch("/api/config/all");
+        const data = await allRes.json();
+        const configs = data || [];
+        setCompanies(configs.map((c: any, i: number) => ({
+          id: c.id || `cfg-${i}`,
+          companyName: c.companyName
+        })));
+      } catch {
+        setCompanies([]);
+      }
+    }
+
+    setActiveCompany(configResult.status === 'fulfilled' ? configResult.value : null);
+    setLoading(false);
   }, []);
 
   useEffect(() => {

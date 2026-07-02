@@ -5,15 +5,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
 
-    await prisma.tallyConfiguration.updateMany({
-      where: { isActive: true },
-      data: { isActive: false }
-    });
-
-    const config = await prisma.tallyConfiguration.update({
-      where: { id },
-      data: { isActive: true }
-    });
+    const [, config] = await prisma.$transaction([
+      prisma.tallyConfiguration.updateMany({
+        where: { isActive: true },
+        data: { isActive: false }
+      }),
+      prisma.tallyConfiguration.update({
+        where: { id },
+        data: { isActive: true }
+      })
+    ]);
 
     return NextResponse.json(config);
   } catch (error: any) {

@@ -395,4 +395,32 @@ export class TallyDataFetcher {
     if (toDate) params.toDate = toDate;
     return this.fetchReport('VoucherList', params);
   }
+
+  async fetchVouchersChunked(
+    onChunk: (vouchers: any) => Promise<void>,
+    fromDate?: Date,
+    toDate?: Date,
+  ): Promise<void> {
+    const start = fromDate || new Date('2000-01-01');
+    const end = toDate || new Date();
+    const chunkSize = 90;
+    let chunkStart = new Date(start);
+    let chunkEnd = new Date(Math.min(chunkStart.getTime() + chunkSize * 24 * 60 * 60 * 1000, end.getTime()));
+
+    while (chunkStart < end) {
+      console.log(`Fetching vouchers from ${chunkStart.toISOString().slice(0,10)} to ${chunkEnd.toISOString().slice(0,10)}...`);
+      const params: Record<string, any> = {
+        fromDate: chunkStart,
+        toDate: chunkEnd
+      };
+      const raw = await this.fetchReport('VoucherList', params);
+      const vouchers = raw?.vouchers || [];
+      if (vouchers.length > 0) {
+        console.log(`  Found ${vouchers.length} vouchers in this chunk`);
+        await onChunk(raw);
+      }
+      chunkStart = new Date(chunkEnd.getTime() + 1);
+      chunkEnd = new Date(Math.min(chunkStart.getTime() + chunkSize * 24 * 60 * 60 * 1000, end.getTime()));
+    }
+  }
 }

@@ -57,6 +57,7 @@ model Ledger {
   @@index([companyId])
   @@index([name])
   @@index([groupName])
+  @@index([companyId, parentGroup])
 }
 
 model StockGroup {
@@ -100,6 +101,7 @@ model StockItem {
   @@unique([tallyId, companyId])
   @@index([companyId])
   @@index([name])
+  @@index([stockGroupId])
 }
 
 model VoucherType {
@@ -131,6 +133,8 @@ model Voucher {
   @@index([voucherDate])
   @@index([voucherTypeId])
   @@index([voucherNumber])
+  @@index([companyId, voucherDate])
+  @@index([companyId, isCancelled])
 }
 
 model VoucherEntry {
@@ -155,6 +159,7 @@ model VoucherEntry {
   @@index([companyId])
   @@index([voucherId])
   @@index([ledgerId])
+  @@index([companyId, ledgerId])
 }
 
 model SyncLog {
@@ -180,6 +185,7 @@ model SyncMetadata {
   company            TallyConfiguration @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([entityType, companyId])
+  @@index([companyId])
 }
 
 model UserProfile {

@@ -38,6 +38,13 @@ interface StockRow {
   stockGroup: { name: string };
 }
 
+interface DashboardStats {
+  assets: number;
+  liabilities: number;
+  ledgerCount: number;
+  voucherCount: number;
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch ${url}`);
@@ -94,18 +101,19 @@ export function useStockSummary(companyId?: string) {
 }
 
 export function useDashboardCards(companyId?: string) {
-  const bs = useBalanceSheet(companyId);
-  const tb = useTrialBalance(companyId);
-  const rv = useRecentVouchers(companyId, 1000);
-
-  const isLoading = bs.isLoading || tb.isLoading || rv.isLoading;
-
-  const assets = bs.data?.find((r) => r.category === "Assets")?.balance ?? 0;
-  const liabilities = bs.data?.find((r) => r.category === "Liabilities")?.balance ?? 0;
-  const ledgerCount = tb.data?.length ?? 0;
-  const voucherCount = rv.data?.length ?? 0;
-
-  return { assets, liabilities, ledgerCount, voucherCount, isLoading };
+  return useQuery({
+    queryKey: ["dashboard", "stats", companyId],
+    queryFn: () => fetchJson<DashboardStats>(`/api/dashboard/stats?companyId=${companyId}`),
+    enabled: !!companyId,
+    select: (data) => ({
+      assets: data.assets,
+      liabilities: data.liabilities,
+      ledgerCount: data.ledgerCount,
+      voucherCount: data.voucherCount,
+      isLoading: false,
+    }),
+    placeholderData: { assets: 0, liabilities: 0, ledgerCount: 0, voucherCount: 0 } as DashboardStats,
+  });
 }
 
 export function useChartData(companyId?: string) {

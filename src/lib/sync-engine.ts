@@ -14,6 +14,8 @@ export interface SyncResult {
   };
 }
 
+const SYNC_LOCK_KEY = 'sync_in_progress';
+
 export class SyncEngine {
   private fetcher: TallyDataFetcher;
   private transformer: DataTransformer;
@@ -23,7 +25,42 @@ export class SyncEngine {
     this.transformer = new DataTransformer();
   }
 
+  private async acquireLock(): Promise<boolean> {
+    try {
+      const existing = await prisma.syncMetadata.findFirst({
+        where: { entityType: SYNC_LOCK_KEY, companyId: 'GLOBAL' }
+      });
+      if (existing && existing.lastSyncTime > new Date(Date.now() - 30 * 60 * 1000)) {
+        return false;
+      }
+      await prisma.syncMetadata.upsert({
+        where: { entityType_companyId: { entityType: SYNC_LOCK_KEY, companyId: 'GLOBAL' } },
+        update: { lastSyncTime: new Date() },
+        create: { entityType: SYNC_LOCK_KEY, companyId: 'GLOBAL', lastSyncTime: new Date() }
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async releaseLock(): Promise<void> {
+    try {
+      await prisma.syncMetadata.upsert({
+        where: { entityType_companyId: { entityType: SYNC_LOCK_KEY, companyId: 'GLOBAL' } },
+        update: { lastSyncTime: new Date(0) },
+        create: { entityType: SYNC_LOCK_KEY, companyId: 'GLOBAL', lastSyncTime: new Date(0) }
+      });
+    } catch {
+      // ignore
+    }
+  }
+
   async performFullSync(configId: string): Promise<SyncResult> {
+    if (!(await this.acquireLock())) {
+      throw new Error('A sync is already in progress. Please wait for it to complete.');
+    }
+
     const syncLog = await prisma.syncLog.create({
       data: {
         syncType: SyncType.FULL,
@@ -86,13 +123,15 @@ export class SyncEngine {
         where: { id: syncLog.id },
         data: {
           status: SyncStatus.FAILED,
-          errorMessage: error.message,
-          errors: error,
+          errorMessage: error?.message || 'Unknown error',
+          errors: error?.message ? { message: error.message } : undefined,
           completedAt: new Date()
         }
       });
 
       throw error;
+    } finally {
+      await this.releaseLock();
     }
   }
 
@@ -117,7 +156,7 @@ export class SyncEngine {
         results.push({ configId: config.id, result });
         console.log(`Company ${config.companyName} synced successfully`);
       } catch (error: any) {
-        console.error(`Company ${config.companyName} sync failed:`, error.message);
+        console.error(`Company ${config.companyName} sync failed:`, error?.message);
         results.push({
           configId: config.id,
           result: {
@@ -134,6 +173,10 @@ export class SyncEngine {
   }
 
   async performLedgerSync(configId: string): Promise<number> {
+    if (!(await this.acquireLock())) {
+      throw new Error('A sync is already in progress. Please wait for it to complete.');
+    }
+
     const syncLog = await prisma.syncLog.create({
       data: { syncType: SyncType.FULL, status: SyncStatus.IN_PROGRESS, recordsProcessed: 0 }
     });
@@ -144,12 +187,18 @@ export class SyncEngine {
       await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.COMPLETED, recordsProcessed: count, completedAt: new Date() } });
       return count;
     } catch (error: any) {
-      await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.FAILED, errorMessage: error.message, completedAt: new Date() } });
+      await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.FAILED, errorMessage: error?.message || 'Unknown error', completedAt: new Date() } });
       throw error;
+    } finally {
+      await this.releaseLock();
     }
   }
 
   async performStockSync(configId: string): Promise<number> {
+    if (!(await this.acquireLock())) {
+      throw new Error('A sync is already in progress. Please wait for it to complete.');
+    }
+
     const syncLog = await prisma.syncLog.create({
       data: { syncType: SyncType.FULL, status: SyncStatus.IN_PROGRESS, recordsProcessed: 0 }
     });
@@ -164,12 +213,18 @@ export class SyncEngine {
       await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.COMPLETED, recordsProcessed: total, completedAt: new Date() } });
       return total;
     } catch (error: any) {
-      await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.FAILED, errorMessage: error.message, completedAt: new Date() } });
+      await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.FAILED, errorMessage: error?.message || 'Unknown error', completedAt: new Date() } });
       throw error;
+    } finally {
+      await this.releaseLock();
     }
   }
 
   async performVoucherSync(configId: string, fromDate?: Date, toDate?: Date): Promise<number> {
+    if (!(await this.acquireLock())) {
+      throw new Error('A sync is already in progress. Please wait for it to complete.');
+    }
+
     const syncLog = await prisma.syncLog.create({
       data: { syncType: SyncType.INCREMENTAL, status: SyncStatus.IN_PROGRESS, recordsProcessed: 0 }
     });
@@ -178,12 +233,18 @@ export class SyncEngine {
       await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.COMPLETED, recordsProcessed: count, completedAt: new Date() } });
       return count;
     } catch (error: any) {
-      await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.FAILED, errorMessage: error.message, completedAt: new Date() } });
+      await prisma.syncLog.update({ where: { id: syncLog.id }, data: { status: SyncStatus.FAILED, errorMessage: error?.message || 'Unknown error', completedAt: new Date() } });
       throw error;
+    } finally {
+      await this.releaseLock();
     }
   }
 
   async performIncrementalSync(configId: string): Promise<SyncResult> {
+    if (!(await this.acquireLock())) {
+      throw new Error('A sync is already in progress. Please wait for it to complete.');
+    }
+
     const config = await prisma.tallyConfiguration.findUnique({
       where: { id: configId }
     });
@@ -234,27 +295,31 @@ export class SyncEngine {
         where: { id: syncLog.id },
         data: {
           status: SyncStatus.FAILED,
-          errorMessage: error.message,
+          errorMessage: error?.message || 'Unknown error',
           completedAt: new Date()
         }
       });
 
       throw error;
+    } finally {
+      await this.releaseLock();
     }
   }
 
   private async fetchAndSaveVouchersInBatches(configId: string, fromDate?: Date, toDate?: Date): Promise<number> {
     let totalProcessed = 0;
 
-    console.log('Fetching all vouchers in single batch...');
-    const rawVouchers = await this.fetcher.fetchVouchers(fromDate, toDate);
-    const voucherArray = rawVouchers?.vouchers || [];
+    const start = fromDate || new Date('2000-01-01');
+    const end = toDate || new Date();
 
-    console.log(`Fetched ${voucherArray.length} vouchers`);
+    console.log(`Fetching vouchers in 90-day chunks from ${start.toISOString().slice(0,10)} to ${end.toISOString().slice(0,10)}...`);
 
-    const processed = await this.transformer.transformAndSaveVouchers(rawVouchers, configId);
-    totalProcessed += processed;
+    await this.fetcher.fetchVouchersChunked(async (rawVouchers) => {
+      const processed = await this.transformer.transformAndSaveVouchers(rawVouchers, configId);
+      totalProcessed += processed;
+    }, start, end);
 
+    console.log(`Total vouchers processed: ${totalProcessed}`);
     return totalProcessed;
   }
 
@@ -262,12 +327,12 @@ export class SyncEngine {
     const now = new Date();
     const entities = ['ledgers', 'stockGroups', 'stockItems', 'vouchers'];
 
-    for (const entity of entities) {
-      await prisma.syncMetadata.upsert({
+    await Promise.all(entities.map(entity =>
+      prisma.syncMetadata.upsert({
         where: { entityType_companyId: { entityType: entity, companyId: configId } },
         update: { lastSyncTime: now },
         create: { entityType: entity, companyId: configId, lastSyncTime: now }
-      });
-    }
+      })
+    ));
   }
 }

@@ -16,13 +16,17 @@ import { TrendingUpIcon } from "lucide-react"
 
 export function SectionCards() {
   const { activeCompany } = useCompany()
-  const { assets, liabilities, ledgerCount, voucherCount, isLoading } = useDashboardCards(activeCompany?.id)
+  const { data: cards, isLoading } = useDashboardCards(activeCompany?.id)
+  const assets = cards?.assets ?? 0
+  const liabilities = cards?.liabilities ?? 0
+  const ledgerCount = cards?.ledgerCount ?? 0
+  const voucherCount = cards?.voucherCount ?? 0
 
   function fmt(n: number) {
     return new Intl.NumberFormat("en-IN").format(n)
   }
 
-  const cards = [
+  const cardItems = [
     { label: "Total Assets", value: fmt(assets), loading: isLoading },
     { label: "Total Liabilities", value: fmt(liabilities), loading: isLoading },
     { label: "Total Ledgers", value: fmt(ledgerCount), loading: isLoading },
@@ -31,7 +35,7 @@ export function SectionCards() {
 
   return (
     <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-      {cards.map((card) => (
+      {cardItems.map((card) => (
         <Card key={card.label} className="@container/card">
           <CardHeader>
             <CardDescription>{card.label}</CardDescription>

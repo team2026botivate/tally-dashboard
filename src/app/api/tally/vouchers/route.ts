@@ -4,12 +4,15 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get('companyId');
+    if (!companyId) return NextResponse.json({ error: 'companyId is required' }, { status: 400 });
+
     const from = searchParams.get('from');
     const to = searchParams.get('to');
     const type = searchParams.get('type');
     const limit = searchParams.get('limit');
 
-    const where: any = { isCancelled: false };
+    const where: any = { companyId, isCancelled: false };
     if (from) where.voucherDate = { ...where.voucherDate, gte: new Date(from) };
     if (to) where.voucherDate = { ...where.voucherDate, lte: new Date(to) };
     if (type) where.voucherType = { name: type };
