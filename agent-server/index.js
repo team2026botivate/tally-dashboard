@@ -99,9 +99,9 @@ function buildCompanyXml() {
       <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="CompanyList" ISINITIALIZE="No" ISFIXLIST="No">
+          <COLLECTION NAME="CompanyList" ISINITIALIZE="Yes">
             <TYPE>Company</TYPE>
-            <FETCH>NAME, GUID</FETCH>
+            <FETCH>NAME, GUID, STARTINGFROM, ENDINGAT, COMPANYSTATE</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -114,7 +114,7 @@ function buildLedgerXml(companyName) {
   const escapedCompany = escapeXml(companyName);
   const companyVar = escapedCompany ? `<SVCURRENTCOMPANY>${escapedCompany}</SVCURRENTCOMPANY>` : '';
   return `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><SUBTYPE>ALL</SUBTYPE><ID>MyLedgers</ID></HEADER>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>MyLedgers</ID></HEADER>
   <BODY>
     <DESC>
       <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}</STATICVARIABLES>
@@ -122,7 +122,7 @@ function buildLedgerXml(companyName) {
         <TDLMESSAGE>
           <COLLECTION NAME="MyLedgers" ISINITIALIZE="Yes">
             <TYPE>Ledger</TYPE>
-            <FETCH>NAME, PARENT, GUID, OPENINGBALANCE, CLOSINGBALANCE, CURRENCYNAME, MAILINGNAME, PINCODE, STATE, COUNTRY, GSTIN, GSTREGISTRATIONTYPE</FETCH>
+            <FETCH>NAME, PARENT, GUID, OPENINGBALANCE, CLOSINGBALANCE, GSTIN</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -135,7 +135,7 @@ function buildStockGroupXml(companyName) {
   const escapedCompany = escapeXml(companyName);
   const companyVar = escapedCompany ? `<SVCURRENTCOMPANY>${escapedCompany}</SVCURRENTCOMPANY>` : '';
   return `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><SUBTYPE>ALL</SUBTYPE><ID>MyStockGroups</ID></HEADER>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>MyStockGroups</ID></HEADER>
   <BODY>
     <DESC>
       <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}</STATICVARIABLES>
@@ -156,7 +156,7 @@ function buildStockItemXml(companyName) {
   const escapedCompany = escapeXml(companyName);
   const companyVar = escapedCompany ? `<SVCURRENTCOMPANY>${escapedCompany}</SVCURRENTCOMPANY>` : '';
   return `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><SUBTYPE>ALL</SUBTYPE><ID>MyStockItems</ID></HEADER>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>MyStockItems</ID></HEADER>
   <BODY>
     <DESC>
       <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}</STATICVARIABLES>
@@ -164,7 +164,7 @@ function buildStockItemXml(companyName) {
         <TDLMESSAGE>
           <COLLECTION NAME="MyStockItems" ISINITIALIZE="Yes">
             <TYPE>Stock Item</TYPE>
-            <FETCH>NAME, PARENT, GUID, BASEUNITS, OPENINGBALANCE, OPENINGVALUE, CLOSINGBALANCE, CLOSINGVALUE, LASTPURCHASECOST, GSTAPPLICABLE, GSTTYPEOFSUPPLY, HSNCODE</FETCH>
+            <FETCH>NAME, PARENT, GUID, BASEUNITS, OPENINGBALANCE, OPENINGVALUE, CLOSINGBALANCE, CLOSINGVALUE, LASTPURCHASECOST, HSNCODE</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -181,7 +181,7 @@ function buildVoucherXml(companyName, fromDate, toDate) {
   const staticVars = `<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}${dateVars}${dateVars2}`;
 
   return `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><SUBTYPE>ALL</SUBTYPE><ID>MyVouchers</ID></HEADER>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>MyVouchers</ID></HEADER>
   <BODY>
     <DESC>
       <STATICVARIABLES>${staticVars}</STATICVARIABLES>
@@ -189,10 +189,8 @@ function buildVoucherXml(companyName, fromDate, toDate) {
         <TDLMESSAGE>
           <COLLECTION NAME="MyVouchers" ISINITIALIZE="Yes">
             <TYPE>Voucher</TYPE>
-            <FETCH>VOUCHERNUMBER, DATE, VOUCHERTYPENAME, NARRATION, GUID, ALLLEDGERENTRIES</FETCH>
-            <FILTER>ISNOTCANCELLED</FILTER>
+            <FETCH>VOUCHERNUMBER, DATE, VOUCHERTYPENAME, NARRATION, GUID, ALLLEDGERENTRIES, TOTALAMOUNT</FETCH>
           </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="ISNOTCANCELLED">NOT $$IsCancelled</SYSTEM>
         </TDLMESSAGE>
       </TDL>
     </DESC>
@@ -252,9 +250,10 @@ function checkErrors(parsed) {
 /**
  * Tally can return collection data in multiple places depending on
  * the request type. This helper checks all known locations:
- *  1. BODY.DATA.COLLECTION  (standard EXPORTDATA / TYPE=Data)
- *  2. BODY.DATA.TALLYMESSAGE[].COLLECTION  (some TDL variants)
- *  3. BODY.DESC.TALLYMESSAGE[].COLLECTION  (older TYPE=Collection)
+ *  1. BODY.DATA.COLLECTION[i]    (TYPE=Collection, most common)
+ *  2. BODY.DATA.TALLYMESSAGE[i].COLLECTION  (some TDL variants)
+ *  3. BODY.DATA.TALLYMESSAGE[i][tag]  (TYPE=Data — each message IS an object)
+ *  4. BODY.DESC.TALLYMESSAGE[i].COLLECTION  (older formats)
  */
 function collectionItems(parsed, tag) {
   const envelope = parsed?.ENVELOPE;
@@ -271,7 +270,7 @@ function collectionItems(parsed, tag) {
     return null;
   };
 
-  // 1. BODY.DATA.COLLECTION
+  // 1. BODY.DATA.COLLECTION (TYPE=Collection responses)
   const dataColl = envelope.BODY?.DATA?.COLLECTION;
   if (dataColl) {
     const arr = Array.isArray(dataColl) ? dataColl : [dataColl];
@@ -281,19 +280,28 @@ function collectionItems(parsed, tag) {
     }
   }
 
-  // 2. BODY.DATA.TALLYMESSAGE[].COLLECTION
+  // 2 & 3. BODY.DATA.TALLYMESSAGE — both COLLECTION wrapper and direct objects
   const dataMsg = envelope.BODY?.DATA?.TALLYMESSAGE;
   if (dataMsg) {
     const msgs = Array.isArray(dataMsg) ? dataMsg : [dataMsg];
+
+    // 2. TALLYMESSAGE[i].COLLECTION (some TDL variants)
     for (const msg of msgs) {
       const coll = msg.COLLECTION;
       if (!coll) continue;
       const found = pick(coll);
       if (found && found.length > 0) return found;
     }
+
+    // 3. TALLYMESSAGE[i][tag] directly (TYPE=Data — each TALLYMESSAGE is one object)
+    const directItems = msgs.map(msg => {
+      const found = pick(msg);
+      return found ? found[0] : null;
+    }).filter(item => item != null && typeof item === 'object');
+    if (directItems.length > 0) return directItems;
   }
 
-  // 3. BODY.DESC.TALLYMESSAGE[].COLLECTION
+  // 4. BODY.DESC.TALLYMESSAGE[i].COLLECTION (older format)
   const descMsg = envelope.BODY?.DESC?.TALLYMESSAGE;
   if (descMsg) {
     const msgs = Array.isArray(descMsg) ? descMsg : [descMsg];
@@ -560,10 +568,7 @@ async function syncVoucherChunk(companyName, chunkStart, chunkEnd) {
 }
 
 async function syncVouchers(companyName) {
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
-  const startYear = currentMonth < 3 ? currentYear - 1 : currentYear;
-  const startDate = new Date(startYear, 3, 1); // April 1st of current financial year
+  const startDate = new Date('2026-01-01');
   const endDate = new Date();
   const chunks = buildVoucherChunks(startDate, endDate);
 

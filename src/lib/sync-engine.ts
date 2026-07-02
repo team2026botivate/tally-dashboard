@@ -309,7 +309,7 @@ export class SyncEngine {
   private async fetchAndSaveVouchersInBatches(configId: string, fromDate?: Date, toDate?: Date): Promise<number> {
     let totalProcessed = 0;
 
-    const start = fromDate || new Date('2000-01-01');
+    const start = fromDate || new Date('2026-01-01');
     const end = toDate || new Date();
 
     console.log(`Fetching vouchers in 90-day chunks from ${start.toISOString().slice(0,10)} to ${end.toISOString().slice(0,10)}...`);

@@ -401,7 +401,7 @@ export class TallyDataFetcher {
     fromDate?: Date,
     toDate?: Date,
   ): Promise<void> {
-    const start = fromDate || new Date('2000-01-01');
+    const start = fromDate || new Date('2026-01-01');
     const end = toDate || new Date();
     const chunkSize = 90;
     let chunkStart = new Date(start);
