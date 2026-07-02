@@ -140,7 +140,10 @@ export default function SettingsPage() {
   const { data: users = [], isLoading: usersLoading } = useUsers()
   const updateUser = useUpdateUser()
   const testTallyConn = useTestTallyConnection()
-  const saveConfig = useSaveTallyConfig(() => refreshCompanies())
+  const saveConfig = useSaveTallyConfig(() => {
+    refreshCompanies()
+    handleSync("full")
+  })
   const triggerSync = useTriggerSync()
   
   const { data: syncStatus, isLoading: statusLoading } = useSyncStatus()

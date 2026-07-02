@@ -22,6 +22,8 @@ import {
   RefreshCwIcon,
   ArrowRightIcon
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { AnimatedGridPattern } from '@/components/ui/animated-grid-pattern';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -69,8 +71,17 @@ export default function LoginPage() {
       <div className="grid w-full lg:grid-cols-2">
         {/* Left Column - Minimal Panel (No text, logo, or icons) */}
         <div className="hidden lg:flex flex-col items-center justify-center p-12 bg-zinc-50 border-r border-zinc-100 select-none relative overflow-hidden">
-          {/* Subtle Grid */}
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#f4f4f5_1px,transparent_1px),linear-gradient(to_bottom,#f4f4f5_1px,transparent_1px)] bg-[size:32px_32px] opacity-70"></div>
+          {/* Animated Grid Pattern */}
+          <AnimatedGridPattern
+            numSquares={30}
+            maxOpacity={0.2}
+            duration={3}
+            repeatDelay={1}
+            className={cn(
+              "[mask-image:radial-gradient(500px_circle_at_center,white,transparent)]",
+              "inset-y-[-30%] h-[200%] skew-y-12 fill-zinc-300/30 stroke-zinc-300/30",
+            )}
+          />
         </div>
 
         {/* Right Column - Minimal Form */}

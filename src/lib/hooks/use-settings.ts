@@ -106,6 +106,7 @@ export function useSaveTallyConfig(onSuccess?: () => void) {
     onSuccess: (data) => {
       toast.success(`Tally configuration saved — ${data.companies?.length ?? 0} companies found`);
       queryClient.invalidateQueries({ queryKey: ["tally-config"] });
+      queryClient.invalidateQueries({ queryKey: ["sync"] });
       onSuccess?.();
     },
     onError: (err: Error) => {
