@@ -12,6 +12,13 @@ const TALLY_PORT = parseInt(process.env.TALLY_PORT || '9000', 10);
 const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL || '300000', 10); // 5 min
 const VOUCHER_CHUNK_DAYS = 90;
 
+// Max number of Tally/cloud requests allowed in flight at once.
+// Tally's local HTTP interface serializes requests internally, so pushing
+// this too high just causes queuing/timeouts rather than real speedup.
+// Tune via env var; running locally with good hardware you can likely go
+// higher than the default, but watch for ECONNRESET / timeout errors.
+const CONCURRENCY = parseInt(process.env.CONCURRENCY || '4', 10);
+
 // ─── State ───────────────────────────────────────────────────────────────────
 
 let config = loadConfig();
@@ -26,9 +33,32 @@ const parser = new XMLParser({
   trimValues: true,
   isArray: (tagName) =>
     ['LEDGER', 'GROUP', 'STOCKGROUP', 'STOCKITEM', 'VOUCHER',
-     'LEDGERENTRY', 'TALLYMESSAGE', 'COLLECTION', 'ADDRESS',
-     'LINE', 'COMPANY'].includes(tagName.toUpperCase())
+      'LEDGERENTRY', 'TALLYMESSAGE', 'COLLECTION', 'ADDRESS',
+      'LINE', 'COMPANY'].includes(tagName.toUpperCase())
 });
+
+// ─── Concurrency Helper ──────────────────────────────────────────────────────
+
+/**
+ * Runs `worker` over `items` with at most `limit` running concurrently.
+ * Simple dependency-free replacement for p-limit / p-map.
+ */
+async function pMap(items, worker, limit = CONCURRENCY) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function runner() {
+    while (true) {
+      const i = nextIndex++;
+      if (i >= items.length) return;
+      results[i] = await worker(items[i], i);
+    }
+  }
+
+  const runners = Array.from({ length: Math.min(limit, items.length) }, runner);
+  await Promise.all(runners);
+  return results;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -345,14 +375,16 @@ async function sendHeartbeat() {
   }
 }
 
+// ─── Per-Company Sync (parallel master data) ────────────────────────────────
+
 async function syncLedgers(companyName) {
-  log(`  Fetching ledgers for "${companyName}"...`);
+  log(`  [${companyName}] Fetching ledgers...`);
   const xml = buildMasterXml('LedgerList', companyName);
   const parsed = await fetchFromTally(xml);
   const ledgers = extractLedgers(parsed);
   if (ledgers.length === 0) return 0;
 
-  log(`  Sending ${ledgers.length} ledgers to cloud...`);
+  log(`  [${companyName}] Sending ${ledgers.length} ledgers to cloud...`);
   await axios.post(`${CLOUD_URL}/api/agent/data`, {
     companyName, ledgers, host: TALLY_HOST, port: TALLY_PORT,
   }, { headers: cloudHeaders(), timeout: 60000 });
@@ -360,13 +392,13 @@ async function syncLedgers(companyName) {
 }
 
 async function syncStockGroups(companyName) {
-  log(`  Fetching stock groups for "${companyName}"...`);
+  log(`  [${companyName}] Fetching stock groups...`);
   const xml = buildMasterXml('StockGroupList', companyName);
   const parsed = await fetchFromTally(xml);
   const stockGroups = extractStockGroups(parsed);
   if (stockGroups.length === 0) return 0;
 
-  log(`  Sending ${stockGroups.length} stock groups to cloud...`);
+  log(`  [${companyName}] Sending ${stockGroups.length} stock groups to cloud...`);
   await axios.post(`${CLOUD_URL}/api/agent/data`, {
     companyName, stockGroups, host: TALLY_HOST, port: TALLY_PORT,
   }, { headers: cloudHeaders(), timeout: 30000 });
@@ -374,68 +406,96 @@ async function syncStockGroups(companyName) {
 }
 
 async function syncStockItems(companyName) {
-  log(`  Fetching stock items for "${companyName}"...`);
+  log(`  [${companyName}] Fetching stock items...`);
   const xml = buildMasterXml('StockItemList', companyName);
   const parsed = await fetchFromTally(xml);
   const stockItems = extractStockItems(parsed);
   if (stockItems.length === 0) return 0;
 
-  log(`  Sending ${stockItems.length} stock items to cloud...`);
+  log(`  [${companyName}] Sending ${stockItems.length} stock items to cloud...`);
   await axios.post(`${CLOUD_URL}/api/agent/data`, {
     companyName, stockItems, host: TALLY_HOST, port: TALLY_PORT,
   }, { headers: cloudHeaders(), timeout: 60000 });
   return stockItems.length;
 }
 
-async function syncVouchers(companyName) {
-  const startDate = new Date('2000-01-01');
-  const endDate = new Date();
-  let total = 0;
+/**
+ * Builds the list of [chunkStart, chunkEnd] date pairs covering the full
+ * history range, so all voucher chunks for a company can be fetched
+ * concurrently instead of one-after-another.
+ */
+function buildVoucherChunks(startDate, endDate) {
+  const chunks = [];
   let chunkStart = new Date(startDate);
-
-  log(`  Fetching vouchers for "${companyName}"...`);
-
   while (chunkStart < endDate) {
     const chunkEnd = new Date(Math.min(
       chunkStart.getTime() + VOUCHER_CHUNK_DAYS * 24 * 60 * 60 * 1000,
       endDate.getTime()
     ));
-
-    log(`    ${chunkStart.toISOString().slice(0,10)} to ${chunkEnd.toISOString().slice(0,10)}...`);
-    const xml = buildVoucherXml(companyName, chunkStart, chunkEnd);
-    const parsed = await fetchFromTally(xml);
-    const vouchers = extractVouchers(parsed);
-
-    if (vouchers.length > 0) {
-      log(`    Found ${vouchers.length} vouchers, sending to cloud...`);
-      try {
-        await axios.post(`${CLOUD_URL}/api/agent/data`, {
-          companyName, vouchers, host: TALLY_HOST, port: TALLY_PORT,
-        }, { headers: cloudHeaders(), timeout: 120000 });
-        total += vouchers.length;
-      } catch (err) {
-        log(`    Failed to sync voucher chunk: ${err?.message}`);
-      }
-    }
-
+    chunks.push([chunkStart, chunkEnd]);
     chunkStart = new Date(chunkEnd.getTime() + 1);
   }
+  return chunks;
+}
 
-  return total;
+async function syncVoucherChunk(companyName, chunkStart, chunkEnd) {
+  const label = `${chunkStart.toISOString().slice(0, 10)} to ${chunkEnd.toISOString().slice(0, 10)}`;
+  log(`    [${companyName}] Fetching vouchers ${label}...`);
+  const xml = buildVoucherXml(companyName, chunkStart, chunkEnd);
+
+  let vouchers;
+  try {
+    const parsed = await fetchFromTally(xml);
+    vouchers = extractVouchers(parsed);
+  } catch (err) {
+    log(`    [${companyName}] Failed to fetch voucher chunk ${label}: ${err?.message}`);
+    return 0;
+  }
+
+  if (vouchers.length === 0) return 0;
+
+  log(`    [${companyName}] Found ${vouchers.length} vouchers for ${label}, sending to cloud...`);
+  try {
+    await axios.post(`${CLOUD_URL}/api/agent/data`, {
+      companyName, vouchers, host: TALLY_HOST, port: TALLY_PORT,
+    }, { headers: cloudHeaders(), timeout: 120000 });
+    return vouchers.length;
+  } catch (err) {
+    log(`    [${companyName}] Failed to sync voucher chunk ${label}: ${err?.message}`);
+    return 0;
+  }
+}
+
+async function syncVouchers(companyName) {
+  const startDate = new Date('2000-01-01');
+  const endDate = new Date();
+  const chunks = buildVoucherChunks(startDate, endDate);
+
+  log(`  [${companyName}] Fetching vouchers across ${chunks.length} date chunks (up to ${CONCURRENCY} at a time)...`);
+
+  const counts = await pMap(chunks, ([chunkStart, chunkEnd]) =>
+    syncVoucherChunk(companyName, chunkStart, chunkEnd)
+  );
+
+  return counts.reduce((sum, n) => sum + n, 0);
 }
 
 async function syncCompany(companyName) {
   log(`Syncing company: "${companyName}"`);
   try {
-    const ledgers = await syncLedgers(companyName);
-    const stockGroups = await syncStockGroups(companyName);
-    const stockItems = await syncStockItems(companyName);
-    const vouchers = await syncVouchers(companyName);
-    log(`  Done: ${ledgers} ledgers, ${stockGroups} stock groups, ${stockItems} stock items, ${vouchers} vouchers`);
-    return { ledgers, stockGroups, stockItems, vouchers };
+    // Ledgers, stock groups, stock items, and vouchers are independent data
+    // sets, so fetch/send them all concurrently instead of sequentially.
+    const [ledgers, stockGroups, stockItems, vouchers] = await Promise.all([
+      syncLedgers(companyName),
+      syncStockGroups(companyName),
+      syncStockItems(companyName),
+      syncVouchers(companyName),
+    ]);
+    log(`  Done "${companyName}": ${ledgers} ledgers, ${stockGroups} stock groups, ${stockItems} stock items, ${vouchers} vouchers`);
+    return { companyName, ledgers, stockGroups, stockItems, vouchers };
   } catch (err) {
     log(`  Failed for "${companyName}": ${err?.message}`);
-    return { ledgers: 0, stockGroups: 0, stockItems: 0, vouchers: 0 };
+    return { companyName, ledgers: 0, stockGroups: 0, stockItems: 0, vouchers: 0 };
   }
 }
 
@@ -445,6 +505,7 @@ async function main() {
   log('Tally Agent starting...');
   log(`Tally: http://${TALLY_HOST}:${TALLY_PORT}`);
   log(`Cloud: ${CLOUD_URL}`);
+  log(`Concurrency: ${CONCURRENCY} (tune with CONCURRENCY env var)`);
 
   // Register if needed
   if (!config.gatewayId) {
@@ -463,8 +524,6 @@ async function main() {
   process.on('SIGINT', () => { log('Shutting down...'); running = false; });
   process.on('SIGTERM', () => { running = false; });
 
-  let firstRun = true;
-
   while (running) {
     try {
       // Send heartbeat
@@ -480,16 +539,28 @@ async function main() {
         log('No companies found on Tally. Retrying...');
       } else {
         log(`Found ${companyNames.length} compan${companyNames.length === 1 ? 'y' : 'ies'}: ${companyNames.join(', ')}`);
+        log(`Syncing all companies concurrently (up to ${CONCURRENCY} companies in flight)...`);
 
-        // Sync each company
-        for (const name of companyNames) {
-          if (!running) break;
-          await syncCompany(name);
-        }
+        // Sync all companies concurrently instead of one at a time.
+        // Note: within pMap, each syncCompany() call itself fans out into
+        // several concurrent sub-requests (ledgers/stock/vouchers), so the
+        // effective in-flight request count is company-concurrency times
+        // per-company sub-fetch concurrency. If Tally starts throwing
+        // timeouts/ECONNRESET, lower CONCURRENCY rather than removing the
+        // limiter entirely.
+        const results = await pMap(companyNames, syncCompany);
+
+        const totals = results.reduce((acc, r) => ({
+          ledgers: acc.ledgers + r.ledgers,
+          stockGroups: acc.stockGroups + r.stockGroups,
+          stockItems: acc.stockItems + r.stockItems,
+          vouchers: acc.vouchers + r.vouchers,
+        }), { ledgers: 0, stockGroups: 0, stockItems: 0, vouchers: 0 });
+
+        log(`Sync cycle completed. Totals: ${totals.ledgers} ledgers, ${totals.stockGroups} stock groups, ${totals.stockItems} stock items, ${totals.vouchers} vouchers`);
 
         // Update last sync time
         saveConfig({ lastSyncAt: new Date().toISOString() });
-        log('Sync cycle completed.');
       }
     } catch (err) {
       log('Sync error: ' + (err?.message || err));
