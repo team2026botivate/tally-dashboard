@@ -111,7 +111,8 @@ function buildCompanyXml() {
 }
 
 function buildMasterXml(reportName, companyName) {
-  const companyVar = companyName ? `<SVCURRENTCOMPANY>${companyName}</SVCURRENTCOMPANY>` : '';
+  const escapedCompany = escapeXml(companyName);
+  const companyVar = escapedCompany ? `<SVCURRENTCOMPANY>${escapedCompany}</SVCURRENTCOMPANY>` : '';
   const staticVars = `<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}`;
 
   const templates = {
@@ -172,7 +173,8 @@ function buildMasterXml(reportName, companyName) {
 }
 
 function buildVoucherXml(companyName, fromDate, toDate) {
-  const companyVar = companyName ? `<SVCURRENTCOMPANY>${companyName}</SVCURRENTCOMPANY>` : '';
+  const escapedCompany = escapeXml(companyName);
+  const companyVar = escapedCompany ? `<SVCURRENTCOMPANY>${escapedCompany}</SVCURRENTCOMPANY>` : '';
   const dateVars = fromDate ? `<SVFROMDATE>${fmtDate(fromDate)}</SVFROMDATE>` : '';
   const dateVars2 = toDate ? `<SVTODATE>${fmtDate(toDate)}</SVTODATE>` : '';
   const staticVars = `<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar}${dateVars}${dateVars2}`;
@@ -221,17 +223,49 @@ function val(obj, ...fields) {
 
 // ─── Data Extractors ─────────────────────────────────────────────────────────
 
+function escapeXml(unsafe) {
+  if (!unsafe) return '';
+  return String(unsafe).replace(/[<>&'"]/g, function (c) {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+    }
+  });
+}
+
+function checkErrors(parsed) {
+  const messages = parsed?.ENVELOPE?.BODY?.DESC?.TALLYMESSAGE || [];
+  for (const msg of messages) {
+    if (msg.LINEERROR && msg.LINEERROR.length > 0) {
+      const err = msg.LINEERROR[0]['#text'] || msg.LINEERROR[0];
+      throw new Error(err);
+    }
+  }
+}
+
+function collectionItems(parsed, tag) {
+  const dataColl = parsed?.ENVELOPE?.BODY?.DATA?.COLLECTION;
+  if (!dataColl || dataColl.length === 0) return [];
+  const upper = tag.toUpperCase();
+  const lower = tag.toLowerCase();
+  const capitalized = tag.charAt(0).toUpperCase() + tag.slice(1).toLowerCase();
+  const obj = dataColl[0];
+  const items = obj[tag] || obj[upper] || obj[lower] || obj[capitalized];
+  if (!items) return [];
+  return Array.isArray(items) ? items : [items];
+}
+
 function extractLedgers(parsed) {
   const ledgers = [];
-  const envelope = parsed.ENVELOPE;
-  if (!envelope) return ledgers;
-  const messages = envelope.BODY?.DESC?.TALLYMESSAGE || [];
+  if (!parsed?.ENVELOPE) return ledgers;
+  checkErrors(parsed);
 
-  for (const msg of messages) {
-    const groups = msg.COLLECTION?.GROUP || [];
-    for (const g of groups) {
-      walkGroup(g, null, ledgers);
-    }
+  const groups = collectionItems(parsed, 'GROUP');
+  for (const g of groups) {
+    walkGroup(g, null, ledgers);
   }
   return ledgers;
 }
@@ -239,7 +273,8 @@ function extractLedgers(parsed) {
 function walkGroup(group, rootName, result) {
   const currentRoot = rootName || val(group, 'NAME');
   const groupLedgers = group.LEDGER || [];
-  for (const l of groupLedgers) {
+  for (const l of (Array.isArray(groupLedgers) ? groupLedgers : [groupLedgers])) {
+    if (typeof l !== 'object') continue;
     result.push({
       tallyId: val(l, 'GUID', 'NAME'),
       name: val(l, 'NAME'),
@@ -250,91 +285,85 @@ function walkGroup(group, rootName, result) {
     });
   }
   const subGroups = group.GROUP || [];
-  for (const sg of subGroups) {
-    walkGroup(sg, currentRoot, result);
+  for (const sg of (Array.isArray(subGroups) ? subGroups : [subGroups])) {
+    if (typeof sg === 'object') walkGroup(sg, currentRoot, result);
   }
 }
 
 function extractStockGroups(parsed) {
   const groups = [];
-  const envelope = parsed.ENVELOPE;
-  if (!envelope) return groups;
-  const messages = envelope.BODY?.DESC?.TALLYMESSAGE || [];
+  if (!parsed?.ENVELOPE) return groups;
+  checkErrors(parsed);
 
-  for (const msg of messages) {
-    const items = msg.COLLECTION?.STOCKGROUP || [];
-    for (const sg of items) {
-      groups.push({
-        tallyId: val(sg, 'GUID', 'NAME'),
-        name: val(sg, 'NAME'),
-        parentGroup: val(sg, 'PARENT') || null,
-      });
-    }
+  const items = collectionItems(parsed, 'STOCKGROUP');
+  for (const sg of items) {
+    if (typeof sg !== 'object') continue;
+    groups.push({
+      tallyId: val(sg, 'GUID', 'NAME'),
+      name: val(sg, 'NAME'),
+      parentGroup: val(sg, 'PARENT') || null,
+    });
   }
   return groups;
 }
 
 function extractStockItems(parsed) {
   const items = [];
-  const envelope = parsed.ENVELOPE;
-  if (!envelope) return items;
-  const messages = envelope.BODY?.DESC?.TALLYMESSAGE || [];
+  if (!parsed?.ENVELOPE) return items;
+  checkErrors(parsed);
 
-  for (const msg of messages) {
-    const stockItems = msg.COLLECTION?.STOCKITEM || [];
-    for (const si of stockItems) {
-      items.push({
-        tallyId: val(si, 'GUID', 'NAME'),
-        name: val(si, 'NAME'),
-        unit: val(si, 'UNIT') || 'PCS',
-        openingQty: parseFloat(val(si, 'OPENINGQTY') || '0'),
-        openingValue: parseFloat(val(si, 'OPENINGVALUE') || '0'),
-        closingQty: parseFloat(val(si, 'CLOSINGQTY') || '0'),
-        closingValue: parseFloat(val(si, 'CLOSINGVALUE') || '0'),
-        rate: parseFloat(val(si, 'RATE') || '0'),
-        gstRate: parseFloat(val(si, 'GSTRATE') || '0'),
-        hsnCode: val(si, 'HSNCODE') || null,
-        groupName: val(si, 'PARENT') || 'Primary',
-      });
-    }
+  const stockItems = collectionItems(parsed, 'STOCKITEM');
+  for (const si of stockItems) {
+    if (typeof si !== 'object') continue;
+    items.push({
+      tallyId: val(si, 'GUID', 'NAME'),
+      name: val(si, 'NAME'),
+      unit: val(si, 'UNIT') || 'PCS',
+      openingQty: parseFloat(val(si, 'OPENINGQTY') || '0'),
+      openingValue: parseFloat(val(si, 'OPENINGVALUE') || '0'),
+      closingQty: parseFloat(val(si, 'CLOSINGQTY') || '0'),
+      closingValue: parseFloat(val(si, 'CLOSINGVALUE') || '0'),
+      rate: parseFloat(val(si, 'RATE') || '0'),
+      gstRate: parseFloat(val(si, 'GSTRATE') || '0'),
+      hsnCode: val(si, 'HSNCODE') || null,
+      groupName: val(si, 'PARENT') || 'Primary',
+    });
   }
   return items;
 }
 
 function extractVouchers(parsed) {
   const vouchers = [];
-  const envelope = parsed.ENVELOPE;
-  if (!envelope) return vouchers;
-  const messages = envelope.BODY?.DESC?.TALLYMESSAGE || [];
+  if (!parsed?.ENVELOPE) return vouchers;
+  checkErrors(parsed);
 
-  for (const msg of messages) {
-    const vList = msg.COLLECTION?.VOUCHER || [];
-    for (const v of vList) {
-      const guid = val(v, 'GUID', 'VOUCHERNUMBER');
-      let entries = [];
-      if (v['ALLLEDGERENTRIES.LIST']) {
-        entries = Array.isArray(v['ALLLEDGERENTRIES.LIST']) ? v['ALLLEDGERENTRIES.LIST'] : [v['ALLLEDGERENTRIES.LIST']];
-      } else if (v['LEDGERENTRIES.LIST']) {
-        entries = Array.isArray(v['LEDGERENTRIES.LIST']) ? v['LEDGERENTRIES.LIST'] : [v['LEDGERENTRIES.LIST']];
-      } else if (v.LEDGERENTRIES?.LEDGERENTRY) {
-        entries = Array.isArray(v.LEDGERENTRIES.LEDGERENTRY) ? v.LEDGERENTRIES.LEDGERENTRY : [v.LEDGERENTRIES.LEDGERENTRY];
-      }
-
-      vouchers.push({
-        tallyId: guid,
-        number: val(v, 'VOUCHERNUMBER') || '',
-        date: val(v, 'DATE', 'VOUCHERDATE') || '',
-        type: val(v, 'VOUCHERTYPENAME') || '',
-        narration: val(v, 'NARRATION') || '',
-        totalAmount: parseFloat(val(v, 'TOTALAMOUNT') || '0'),
-        entries: entries.map((e, idx) => ({
-          tallyId: `${guid}-${idx}`,
-          ledgerId: val(e, 'LEDGERNAME') || '',
-          amount: parseFloat(val(e, 'AMOUNT') || '0'),
-          type: e['@_ISDEEMEDPOSITIVE'] === 'Yes' ? 'DR' : 'CR',
-        })),
-      });
+  const vList = collectionItems(parsed, 'VOUCHER');
+  for (const v of vList) {
+    if (typeof v !== 'object') continue;
+    const guid = val(v, 'GUID', 'VOUCHERNUMBER');
+    let entries = [];
+    if (v['ALLLEDGERENTRIES.LIST']) {
+      entries = Array.isArray(v['ALLLEDGERENTRIES.LIST']) ? v['ALLLEDGERENTRIES.LIST'] : [v['ALLLEDGERENTRIES.LIST']];
+    } else if (v['LEDGERENTRIES.LIST']) {
+      entries = Array.isArray(v['LEDGERENTRIES.LIST']) ? v['LEDGERENTRIES.LIST'] : [v['LEDGERENTRIES.LIST']];
+    } else if (v.LEDGERENTRIES?.LEDGERENTRY) {
+      entries = Array.isArray(v.LEDGERENTRIES.LEDGERENTRY) ? v.LEDGERENTRIES.LEDGERENTRY : [v.LEDGERENTRIES.LEDGERENTRY];
     }
+
+    vouchers.push({
+      tallyId: guid,
+      number: val(v, 'VOUCHERNUMBER') || '',
+      date: val(v, 'DATE', 'VOUCHERDATE') || '',
+      type: val(v, 'VOUCHERTYPENAME') || '',
+      narration: val(v, 'NARRATION') || '',
+      totalAmount: parseFloat(val(v, 'TOTALAMOUNT') || '0'),
+      entries: entries.map((e, idx) => ({
+        tallyId: `${guid}-${idx}`,
+        ledgerId: val(e, 'LEDGERNAME') || '',
+        amount: parseFloat(val(e, 'AMOUNT') || '0'),
+        type: e['@_ISDEEMEDPOSITIVE'] === 'Yes' ? 'DR' : 'CR',
+      })),
+    });
   }
   return vouchers;
 }
@@ -468,7 +497,10 @@ async function syncVoucherChunk(companyName, chunkStart, chunkEnd) {
 }
 
 async function syncVouchers(companyName) {
-  const startDate = new Date('2000-01-01');
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  const startYear = currentMonth < 3 ? currentYear - 1 : currentYear;
+  const startDate = new Date(startYear, 3, 1); // April 1st of current financial year
   const endDate = new Date();
   const chunks = buildVoucherChunks(startDate, endDate);
 

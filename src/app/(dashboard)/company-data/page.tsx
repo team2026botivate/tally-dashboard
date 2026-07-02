@@ -5,6 +5,7 @@ import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
+  getPaginationRowModel,
   type SortingState,
   type ColumnDef,
   flexRender,
@@ -15,6 +16,7 @@ import { useTrialBalance, useRecentVouchers, useStockSummary } from "@/lib/hooks
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -92,6 +94,12 @@ function DataTableCard<T extends Record<string, unknown>>({
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 15,
+      },
+    },
   })
 
   return (
@@ -155,7 +163,27 @@ function DataTableCard<T extends Record<string, unknown>>({
               </TableBody>
             </Table>
             {data.length > 0 && (
-              <p className="text-sm text-muted-foreground mt-2">{data.length} records</p>
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-sm text-muted-foreground">{data.length} records</p>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             )}
           </>
         )}
@@ -167,7 +195,7 @@ function DataTableCard<T extends Record<string, unknown>>({
 export default function CompanyDataPage() {
   const { activeCompany } = useCompany()
   const { data: ledgers = [], isLoading: loadingLedgers } = useTrialBalance(activeCompany?.id)
-  const { data: vouchers = [], isLoading: loadingVouchers } = useRecentVouchers(activeCompany?.id, 20)
+  const { data: vouchers = [], isLoading: loadingVouchers } = useRecentVouchers(activeCompany?.id, 10000)
   const { data: stockItems = [], isLoading: loadingStock } = useStockSummary(activeCompany?.id)
 
   const [ledgerSearch, setLedgerSearch] = useState("")
@@ -265,7 +293,7 @@ export default function CompanyDataPage() {
   )
 
   const filteredLedgers = useMemo(
-    () => ledgers.slice(0, 50).filter((l) => !ledgerSearch || l.name.toLowerCase().includes(ledgerSearch.toLowerCase())),
+    () => ledgers.filter((l) => !ledgerSearch || l.name.toLowerCase().includes(ledgerSearch.toLowerCase())),
     [ledgers, ledgerSearch]
   )
   const filteredVouchers = useMemo(
@@ -273,7 +301,7 @@ export default function CompanyDataPage() {
     [vouchers, voucherSearch]
   )
   const filteredStock = useMemo(
-    () => stockItems.slice(0, 50).filter((s) => !stockSearch || s.name.toLowerCase().includes(stockSearch.toLowerCase())),
+    () => stockItems.filter((s) => !stockSearch || s.name.toLowerCase().includes(stockSearch.toLowerCase())),
     [stockItems, stockSearch]
   )
 
