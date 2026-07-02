@@ -7,10 +7,11 @@ export class DataTransformer {
       const year = parseInt(dateStr.substring(0, 4));
       const month = parseInt(dateStr.substring(4, 6)) - 1;
       const day = parseInt(dateStr.substring(6, 8));
-      return new Date(year, month, day);
+      return new Date(Date.UTC(year, month, day));
     }
     const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? new Date() : d;
+    if (isNaN(d.getTime())) return new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   }
 
   async transformAndSaveLedgers(rawLedgers: any, companyId: string): Promise<number> {
@@ -178,8 +179,8 @@ export class DataTransformer {
     const ledgerMapByTallyId = new Map<string, string>();
     const ledgerMapByName = new Map<string, string>();
     for (const l of ledgers) {
-      if (l.tallyId) ledgerMapByTallyId.set(l.tallyId, l.id);
-      if (l.name) ledgerMapByName.set(l.name, l.id);
+      if (l.tallyId) ledgerMapByTallyId.set(l.tallyId.trim().toLowerCase(), l.id);
+      if (l.name) ledgerMapByName.set(l.name.trim().toLowerCase(), l.id);
     }
 
     const existingVoucherTypes = await prisma.voucherType.findMany();
@@ -252,7 +253,8 @@ export class DataTransformer {
         if (!savedId) continue;
 
         for (const entry of v.entries) {
-          const ledgerId = ledgerMapByTallyId.get(entry.ledgerId) || ledgerMapByName.get(entry.ledgerId);
+          const lookupKey = (entry.ledgerId || '').trim().toLowerCase();
+          const ledgerId = ledgerMapByTallyId.get(lookupKey) || ledgerMapByName.get(lookupKey);
           if (!ledgerId) continue;
 
           allEntries.push({
